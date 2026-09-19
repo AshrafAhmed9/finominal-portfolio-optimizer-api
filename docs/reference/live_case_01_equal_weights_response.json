@@ -1,0 +1,58 @@
+{
+    "optimization_strategy": "equal_weights",
+    "allocation_changes": [
+        {
+            "ticker": "IEFA",
+            "security_name": "iShares Core MSCI EAFE ETF",
+            "current_weight": 25.0,
+            "optimized_weight": 50.0,
+            "change": 25.0
+        },
+        {
+            "ticker": "SPY",
+            "security_name": "State Street SPDR S&P 500 ETF Trust",
+            "current_weight": 75.0,
+            "optimized_weight": 50.0,
+            "change": -25.0
+        }
+    ],
+    "factor_betas": null,
+    "meta": {
+        "date_range": {
+            "start": "2012-10-23",
+            "end": "2026-05-27",
+            "observations": 3414,
+            "dropped_rows_per_ticker": {
+                "IEFA": 0,
+                "SPY": 4974
+            }
+        },
+        "conventions": {
+            "risk_free_rate": 0.0,
+            "annualization": 252,
+            "cagr": "geometric, compounded over actual observations",
+            "sharpe": "arithmetic annual excess return / annualized sample volatility"
+        },
+        "solver": {
+            "status": "closed_form",
+            "starts_tried": 1,
+            "iterations": 0
+        },
+        "metrics": {
+            "current": {
+                "cagr": 0.13387997042281788,
+                "volatility": 0.16260139534637877,
+                "sharpe": 0.8544771322133027,
+                "max_drawdown": 0.3359546691715538,
+                "dividend_yield": 0.0155975
+            },
+            "optimized": {
+                "cagr": 0.11751266850189263,
+                "volatility": 0.16045144144109655,
+                "sharpe": 0.7731669208467101,
+                "max_drawdown": 0.33692685717815674,
+                "dividend_yield": 0.021324999999999997
+            }
+        }
+    }
+}

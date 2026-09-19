@@ -1,0 +1,99 @@
+[
+  {
+    "id": 1,
+    "name": "equal_weights_2asset",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 25},
+        {"ticker": "SPY", "weight": 75}
+      ],
+      "strategy": "equal_weights"
+    },
+    "expected_weights": {"IEFA": null, "SPY": null},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_01_equal_weights.png"
+  },
+  {
+    "id": 2,
+    "name": "risk_parity_2asset",
+    "request": {
+      "securities": [
+        {"ticker": "VEA", "weight": 25},
+        {"ticker": "AGG", "weight": 75}
+      ],
+      "strategy": "risk_parity"
+    },
+    "expected_weights": {"VEA": null, "AGG": null},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_02_risk_parity.png"
+  },
+  {
+    "id": 3,
+    "name": "minimize_volatility_3asset",
+    "request": {
+      "securities": [
+        {"ticker": "SPY", "weight": 60},
+        {"ticker": "AGG", "weight": 30},
+        {"ticker": "GLD", "weight": 10}
+      ],
+      "strategy": "minimize_volatility"
+    },
+    "expected_weights": {"SPY": null, "AGG": null, "GLD": null},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_03_min_volatility.png"
+  },
+  {
+    "id": 4,
+    "name": "maximize_sharpe_5asset",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 20},
+        {"ticker": "GLD", "weight": 20},
+        {"ticker": "AGG", "weight": 20},
+        {"ticker": "VEA", "weight": 20},
+        {"ticker": "SPY", "weight": 20}
+      ],
+      "strategy": "maximize_sharpe"
+    },
+    "expected_weights": {"IEFA": null, "GLD": null, "AGG": null, "VEA": null, "SPY": null},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_04_max_sharpe.png"
+  },
+  {
+    "id": 5,
+    "name": "maximize_sharpe_constrained",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 20},
+        {"ticker": "GLD", "weight": 20},
+        {"ticker": "AGG", "weight": 20},
+        {"ticker": "VEA", "weight": 20},
+        {"ticker": "SPY", "weight": 20}
+      ],
+      "strategy": "maximize_sharpe",
+      "constraints": {"min_dividend_yield": 2.5, "min_weight": 5, "max_weight": 40}
+    },
+    "expected_weights": {"IEFA": null, "GLD": null, "AGG": null, "VEA": null, "SPY": null},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_05_max_sharpe_constrained.png"
+  },
+  {
+    "id": 6,
+    "name": "factor_exposure_momentum",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 20},
+        {"ticker": "GLD", "weight": 20},
+        {"ticker": "AGG", "weight": 20},
+        {"ticker": "VEA", "weight": 20},
+        {"ticker": "SPY", "weight": 20}
+      ],
+      "strategy": "optimize_factor_exposure",
+      "factor_targets": [{"factor": "momentum", "direction": "maximize"}]
+    },
+    "expected_weights": {"IEFA": null, "GLD": null, "AGG": null, "VEA": null, "SPY": null},
+    "tolerance_pp": 0.1,
+    "note": "Per the assignment, case 6 is NOT required to match the live tool's exact weights (it uses a broader internal factor model). The pass condition asserted separately in tests/test_factors.py::test_case6_momentum_exposure_increases is that optimized momentum beta > current momentum beta, not weight parity. Fill expected_weights here only if you want an informal comparison point.",
+    "reference_screenshot": "docs/reference/case_06_factor_momentum.png"
+  }
+]

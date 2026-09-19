@@ -1,0 +1,15 @@
+{
+  "securities": [
+    {"ticker": "IEFA", "weight": 20},
+    {"ticker": "GLD", "weight": 20},
+    {"ticker": "AGG", "weight": 20},
+    {"ticker": "VEA", "weight": 20},
+    {"ticker": "SPY", "weight": 20}
+  ],
+  "strategy": "maximize_sharpe",
+  "constraints": {
+    "min_dividend_yield": 2.5,
+    "min_weight": 5,
+    "max_weight": 40
+  }
+}

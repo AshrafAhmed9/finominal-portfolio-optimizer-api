@@ -1,0 +1,58 @@
+{
+    "optimization_strategy": "risk_parity",
+    "allocation_changes": [
+        {
+            "ticker": "VEA",
+            "security_name": "Vanguard Developed Markets Index Fund;ETF",
+            "current_weight": 25.0,
+            "optimized_weight": 20.124235511539357,
+            "change": -4.875764488460643
+        },
+        {
+            "ticker": "AGG",
+            "security_name": "iShares Core US Aggregate Bond ETF",
+            "current_weight": 75.0,
+            "optimized_weight": 79.87576448846065,
+            "change": 4.875764488460646
+        }
+    ],
+    "factor_betas": null,
+    "meta": {
+        "date_range": {
+            "start": "2007-07-26",
+            "end": "2026-05-27",
+            "observations": 4739,
+            "dropped_rows_per_ticker": {
+                "VEA": 0,
+                "AGG": 963
+            }
+        },
+        "conventions": {
+            "risk_free_rate": 0.0,
+            "annualization": 252,
+            "cagr": "geometric, compounded over actual observations",
+            "sharpe": "arithmetic annual excess return / annualized sample volatility"
+        },
+        "solver": {
+            "status": "Optimization terminated successfully",
+            "starts_tried": 10,
+            "iterations": 22
+        },
+        "metrics": {
+            "current": {
+                "cagr": 0.04091989401471103,
+                "volatility": 0.06886625302213413,
+                "sharpe": 0.6168710131450087,
+                "max_drawdown": 0.2094856200921884,
+                "dividend_yield": 0.03489
+            },
+            "optimized": {
+                "cagr": 0.03915967146244929,
+                "volatility": 0.06258811562105267,
+                "sharpe": 0.6451245795788663,
+                "max_drawdown": 0.19500066377168457,
+                "dividend_yield": 0.035835898310761366
+            }
+        }
+    }
+}

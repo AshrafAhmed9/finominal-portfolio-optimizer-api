@@ -1,0 +1,93 @@
+{
+    "optimization_strategy": "optimize_factor_exposure",
+    "allocation_changes": [
+        {
+            "ticker": "IEFA",
+            "security_name": "iShares Core MSCI EAFE ETF",
+            "current_weight": 20.0,
+            "optimized_weight": 0.0,
+            "change": -20.0
+        },
+        {
+            "ticker": "GLD",
+            "security_name": "SPDR Gold Shares",
+            "current_weight": 20.0,
+            "optimized_weight": 0.0,
+            "change": -20.0
+        },
+        {
+            "ticker": "AGG",
+            "security_name": "iShares Core US Aggregate Bond ETF",
+            "current_weight": 20.0,
+            "optimized_weight": 0.0,
+            "change": -20.0
+        },
+        {
+            "ticker": "VEA",
+            "security_name": "Vanguard Developed Markets Index Fund;ETF",
+            "current_weight": 20.0,
+            "optimized_weight": 100.0,
+            "change": 80.0
+        },
+        {
+            "ticker": "SPY",
+            "security_name": "State Street SPDR S&P 500 ETF Trust",
+            "current_weight": 20.0,
+            "optimized_weight": 0.0,
+            "change": -20.0
+        }
+    ],
+    "factor_betas": {
+        "current_portfolio": {
+            "momentum": 0.1315743983764339,
+            "value": 0.1651383870199605,
+            "size": -0.05760774676787522
+        },
+        "optimized_portfolio": {
+            "momentum": 0.1873100795087515,
+            "value": 0.3503316910980178,
+            "size": -0.055874418444193996
+        }
+    },
+    "meta": {
+        "date_range": {
+            "start": "2012-10-23",
+            "end": "2026-05-27",
+            "observations": 3414,
+            "dropped_rows_per_ticker": {
+                "IEFA": 0,
+                "GLD": 1999,
+                "AGG": 2288,
+                "VEA": 1325,
+                "SPY": 4974
+            }
+        },
+        "conventions": {
+            "risk_free_rate": 0.0,
+            "annualization": 252,
+            "cagr": "geometric, compounded over actual observations",
+            "sharpe": "arithmetic annual excess return / annualized sample volatility"
+        },
+        "solver": {
+            "status": "linprog_highs",
+            "starts_tried": 1,
+            "iterations": 0
+        },
+        "metrics": {
+            "current": {
+                "cagr": 0.08670519264397528,
+                "volatility": 0.10870228566062105,
+                "sharpe": 0.8195471670371076,
+                "max_drawdown": 0.2228375849513794,
+                "dividend_yield": 0.020546000000000002
+            },
+            "optimized": {
+                "cagr": 0.08921768550244137,
+                "volatility": 0.16716120596871795,
+                "sharpe": 0.5953980236791367,
+                "max_drawdown": 0.35724391954468115,
+                "dividend_yield": 0.02034
+            }
+        }
+    }
+}
