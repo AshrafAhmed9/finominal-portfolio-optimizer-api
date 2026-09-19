@@ -169,6 +169,58 @@ def test_case6_returns_factor_betas_for_both_portfolios(client):
     assert betas["optimized_portfolio"]["momentum"] > betas["current_portfolio"]["momentum"]
 
 
+def test_min_cagr_portfolio_constraint_respected(client):
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 60}, {"ticker": "AGG", "weight": 40}],
+        "strategy": "minimize_volatility",
+        "constraints": {"min_cagr": 2},  # 2%, comfortably achievable by this pair historically
+    })
+    assert r.status_code == 200, r.json()
+    assert r.json()["meta"]["metrics"]["optimized"]["cagr"] >= 0.02 - 1e-6
+
+
+def test_max_drawdown_portfolio_constraint_respected_when_feasible(client):
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 60}, {"ticker": "AGG", "weight": 40}],
+        "strategy": "maximize_sharpe",
+        "constraints": {"max_drawdown": 20},
+    })
+    assert r.status_code == 200, r.json()
+    assert r.json()["meta"]["metrics"]["optimized"]["max_drawdown"] <= 0.20 + 1e-6
+
+
+def test_max_drawdown_portfolio_constraint_rejected_when_infeasible(client):
+    # SPY (2008) and AGG (2022) both have historical drawdowns well above 15%
+    # over their full common history, so a 15% cap for only these two assets
+    # is genuinely infeasible - this must be a clear 422, not silently
+    # invalid weights or a wrong "success".
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 60}, {"ticker": "AGG", "weight": 40}],
+        "strategy": "maximize_sharpe",
+        "constraints": {"max_drawdown": 15},
+    })
+    assert r.status_code == 422
+
+
+def test_volatility_range_constraint_respected(client):
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 60}, {"ticker": "AGG", "weight": 40}],
+        "strategy": "maximize_sharpe",
+        "constraints": {"volatility_range": {"min": 5, "max": 10}},
+    })
+    assert r.status_code == 200, r.json()
+    vol_pct = r.json()["meta"]["metrics"]["optimized"]["volatility"] * 100
+    assert 5.0 - 0.01 <= vol_pct <= 10.0 + 0.01
+
+
+def test_single_security_portfolio_trivially_100_percent(client):
+    r = client.post("/optimize", json={"securities": [{"ticker": "SPY", "weight": 100}], "strategy": "equal_weights"})
+    assert r.status_code == 200, r.json()
+    changes = r.json()["allocation_changes"]
+    assert len(changes) == 1
+    assert changes[0]["optimized_weight"] == pytest.approx(100.0)
+
+
 def test_infeasible_dividend_yield_returns_clear_422_not_invalid_weights(client):
     r = client.post("/optimize", json={
         "securities": [{"ticker": "SPY", "weight": 50}, {"ticker": "AGG", "weight": 50}],
