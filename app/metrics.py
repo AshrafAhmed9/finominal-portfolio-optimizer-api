@@ -48,10 +48,33 @@ def arithmetic_annual_return(port_returns: np.ndarray) -> float:
     return float(np.mean(port_returns) * TRADING_DAYS_PER_YEAR)
 
 
+def _is_effectively_constant(port_returns: np.ndarray) -> bool:
+    """True when the daily return series has no real variation, only
+    floating-point noise. A genuinely zero-variance series (e.g. an
+    all-cash portfolio) computes an *exact* 0.0 standard deviation, but a
+    portfolio built from real market data that happens to be numerically
+    close to constant (repeated 0.01 returns, say) computes a standard
+    deviation on the order of 1e-18: nonzero, but meaningless relative to
+    the data itself, and annualizing it by sqrt(252) then dividing by it
+    produces a Sharpe in the tens of quadrillions instead of the intended
+    "undefined" result.
+
+    The threshold combines an absolute floor (1e-9, comfortably above
+    float64 rounding error for numbers in the 0.001-1.0 range these return
+    series live in) with a relative floor tied to the series' own scale
+    (1e-6 x mean absolute return), so a genuinely low but real-variance
+    series - a bond fund with tiny day-to-day moves - is never misclassified
+    as constant just because its numbers are individually small.
+    """
+    daily_std = np.std(port_returns, ddof=1)
+    scale = np.mean(np.abs(port_returns))
+    return bool(daily_std <= 1e-9 + 1e-6 * scale)
+
+
 def sharpe_ratio(port_returns: np.ndarray, risk_free_rate: float = ANNUAL_RISK_FREE_RATE) -> float | None:
+    if _is_effectively_constant(port_returns):
+        return None  # undefined; a (numerically) zero-variance portfolio has no risk-adjusted ratio
     vol = annual_volatility(port_returns)
-    if vol == 0.0:
-        return None  # undefined; a zero-variance portfolio has no risk-adjusted ratio
     return (arithmetic_annual_return(port_returns) - risk_free_rate) / vol
 
 

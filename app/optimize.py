@@ -209,7 +209,13 @@ def risk_parity(
         q = risk_contributions(w)
         return float(np.sum((q - 1.0 / n) ** 2)) * 1e4  # scaled off the 1e-10 floor
 
-    inv_vol = 1.0 / np.sqrt(np.diag(covariance))
+    # A zero (or numerically indistinguishable from zero) variance asset
+    # would make 1/sqrt(var) divide by zero and turn the whole seed into
+    # NaN; treat that asset as a large-but-finite inverse-vol instead of
+    # infinite, so it dominates the seed's weight rather than poisoning it.
+    variances = np.diag(covariance)
+    safe_variances = np.where(variances > 1e-14, variances, 1e-14)
+    inv_vol = 1.0 / np.sqrt(safe_variances)
     inv_vol_seed = inv_vol / inv_vol.sum()
     return _run_multistart(objective, bounds, return_matrix, yields, limits, extra_starts=[inv_vol_seed])
 
