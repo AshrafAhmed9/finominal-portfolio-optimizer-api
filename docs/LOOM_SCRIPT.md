@@ -31,13 +31,13 @@ ready to paste.
 ## 0:15-0:45 - What's built, in one breath
 
 **Say:**
-> "It's a FastAPI app: equal weights, risk parity, minimize drawdown, minimize volatility, maximize Sharpe, and factor exposure for the bonus. Every strategy takes bounds, dividend yield floors, CAGR and drawdown limits, and a volatility range. All of it's covered by 71 tests, and I'll show a few of those running live."
+> "It's a FastAPI app: equal weights, risk parity, minimize drawdown, minimize volatility, maximize Sharpe, and factor exposure for the bonus. Every strategy takes bounds, dividend yield floors, CAGR and drawdown limits, and a volatility range. All of it's covered by 125 tests, and I'll show a few of those running live."
 
 **Screen:**
 - Terminal, `tree app/` or a quick scroll through the `app/` folder in an editor, just enough to show the module layout (`data.py`, `metrics.py`, `constraints.py`, `optimize.py`, `factors.py`, `main.py`), not a slow read-through.
 
 **Caption:**
-> 5 required strategies + factor-exposure bonus. 71 passing tests.
+> 5 required strategies + factor-exposure bonus. 125 passing tests.
 
 ---
 
@@ -77,14 +77,14 @@ ready to paste.
 ## 2:30-3:05 - Tests, live
 
 **Say:**
-> "Here's the test suite running: 71 passing. A few of these are worth calling out. This one's a closed-form two-asset minimum-variance check, so it's not just 'the code runs,' it's checked against a known correct answer. Same idea for risk parity: there's a case where it should mathematically reduce to inverse-volatility weighting, and it does. And this one fits the factor regression against returns I generated from betas I already know, just to confirm it actually recovers them."
+> "Here's the test suite running: 125 passing. A few of these are worth calling out. This one's a closed-form two-asset minimum-variance check, so it's not just 'the code runs,' it's checked against a known correct answer. Same idea for risk parity: there's a case where it should mathematically reduce to inverse-volatility weighting, and it does. And this one fits the factor regression against returns I generated from betas I already know, just to confirm it actually recovers them."
 
 **Screen:**
-- Terminal: run `pytest -q`, let it finish and show `71 passed, 1 skipped`.
+- Terminal: run `pytest -q`, let it finish and show `125 passed, 1 skipped`.
 - Cut briefly to `tests/test_optimizers.py`, scrolled to `test_min_volatility_matches_analytic_two_asset_solution` and `test_risk_parity_two_asset_equals_inverse_volatility`.
 
 **Caption:**
-> 71 tests: analytic fixtures, not just "it runs."
+> 125 tests: analytic fixtures, not just "it runs."
 > Includes closed-form checks and a synthetic-coefficient recovery test.
 
 ---
@@ -132,11 +132,11 @@ ready to paste.
 
 ```
 Finominal Portfolio Optimizer API: take-home submission walkthrough.
-5 required strategies + factor-exposure bonus. 71 passing tests.
+5 required strategies + factor-exposure bonus. 125 passing tests.
 Case 5: maximize Sharpe, min yield 2.5%, weights bounded 5-40%.
 Constraints hit exactly, not just satisfied. Binding.
 Request, validation, date alignment, feasibility check, strategy, response.
-71 tests: analytic fixtures, not just "it runs."
+125 tests: analytic fixtures, not just "it runs."
 Includes closed-form checks and a synthetic-coefficient recovery test.
 Infeasible constraints return a specific reason, not a generic failure.
 Bonus: factor exposure. Momentum beta 0.13 to 0.19.

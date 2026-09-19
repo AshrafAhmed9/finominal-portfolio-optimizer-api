@@ -176,6 +176,7 @@ def optimize(req: OptimizeRequest):
         covariance = covariance_matrix(aligned.matrix)
 
     factor_betas_payload = None
+    factor_date_range_payload = None
 
     if req.strategy == Strategy.equal_weights:
         result = equal_weights(tickers, bounds, aligned.matrix, yields, limits)
@@ -189,7 +190,7 @@ def optimize(req: OptimizeRequest):
         result = minimize_drawdown(tickers, bounds, aligned.matrix, yields, limits)
     elif req.strategy == Strategy.optimize_factor_exposure:
         targets = [t.model_dump() for t in req.factor_targets]
-        result, beta_matrix = optimize_factor_exposure(
+        result, beta_matrix, factor_date_range = optimize_factor_exposure(
             tickers, aligned.dates, aligned.matrix, bounds, yields,
             limits, market, targets,
         )
@@ -200,6 +201,7 @@ def optimize(req: OptimizeRequest):
             "current_portfolio": {"momentum": float(current_betas[0]), "value": float(current_betas[1]), "size": float(current_betas[2])},
             "optimized_portfolio": {"momentum": float(optimized_betas[0]), "value": float(optimized_betas[1]), "size": float(optimized_betas[2])},
         }
+        factor_date_range_payload = factor_date_range
     else:
         raise ApiError(422, "unsupported_strategy", f"unsupported strategy {req.strategy!r}", {"supported": [s.value for s in Strategy]})
 
@@ -243,6 +245,11 @@ def optimize(req: OptimizeRequest):
             "optimized": optimized_metrics.as_dict(),
         },
     }
+    if factor_date_range_payload is not None:
+        # The factor regression's own date window, separate from the wider
+        # portfolio date_range above: Factor Returns ends a few days before
+        # the fund data does, so the two windows genuinely differ (R9).
+        meta["factor_date_range"] = factor_date_range_payload
 
     return {
         "optimization_strategy": req.strategy.value,

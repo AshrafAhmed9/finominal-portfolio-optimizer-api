@@ -1,0 +1,114 @@
+{
+  "request": {
+    "securities": [
+      {
+        "ticker": "IEFA",
+        "weight": 20
+      },
+      {
+        "ticker": "GLD",
+        "weight": 20
+      },
+      {
+        "ticker": "AGG",
+        "weight": 20
+      },
+      {
+        "ticker": "VEA",
+        "weight": 20
+      },
+      {
+        "ticker": "SPY",
+        "weight": 20
+      }
+    ],
+    "strategy": "maximize_sharpe",
+    "constraints": {
+      "min_dividend_yield": 2.5,
+      "min_weight": 5,
+      "max_weight": 40
+    }
+  },
+  "response": {
+    "optimization_strategy": "maximize_sharpe",
+    "allocation_changes": [
+      {
+        "ticker": "IEFA",
+        "security_name": "iShares Core MSCI EAFE ETF",
+        "current_weight": 20.0,
+        "optimized_weight": 14.679866355224421,
+        "change": -5.320133644775579
+      },
+      {
+        "ticker": "GLD",
+        "security_name": "SPDR Gold Shares",
+        "current_weight": 20.0,
+        "optimized_weight": 7.139385835764957,
+        "change": -12.860614164235043
+      },
+      {
+        "ticker": "AGG",
+        "security_name": "iShares Core US Aggregate Bond ETF",
+        "current_weight": 20.0,
+        "optimized_weight": 39.9999999999992,
+        "change": 19.999999999999197
+      },
+      {
+        "ticker": "VEA",
+        "security_name": "Vanguard Developed Markets Index Fund;ETF",
+        "current_weight": 20.0,
+        "optimized_weight": 5.000000000000278,
+        "change": -14.999999999999723
+      },
+      {
+        "ticker": "SPY",
+        "security_name": "State Street SPDR S&P 500 ETF Trust",
+        "current_weight": 20.0,
+        "optimized_weight": 33.18074780901114,
+        "change": 13.180747809011137
+      }
+    ],
+    "factor_betas": null,
+    "meta": {
+      "date_range": {
+        "start": "2012-10-23",
+        "end": "2026-05-27",
+        "observations": 3414,
+        "dropped_rows_per_ticker": {
+          "IEFA": 0,
+          "GLD": 1999,
+          "AGG": 2288,
+          "VEA": 1325,
+          "SPY": 4974
+        }
+      },
+      "conventions": {
+        "risk_free_rate": 0.0,
+        "annualization": 252,
+        "cagr": "geometric, compounded over actual observations",
+        "sharpe": "arithmetic annual excess return / annualized sample volatility"
+      },
+      "solver": {
+        "status": "Optimization terminated successfully",
+        "starts_tried": 12,
+        "iterations": 71
+      },
+      "metrics": {
+        "current": {
+          "cagr": 0.08670519264397528,
+          "volatility": 0.10870228566062105,
+          "sharpe": 0.8195471670371076,
+          "max_drawdown": 0.2228375849513794,
+          "dividend_yield": 0.020546000000000002
+        },
+        "optimized": {
+          "cagr": 0.08203342032244718,
+          "volatility": 0.09226129403256848,
+          "sharpe": 0.9009143954505933,
+          "max_drawdown": 0.20291479214974562,
+          "dividend_yield": 0.024999999999991702
+        }
+      }
+    }
+  }
+}

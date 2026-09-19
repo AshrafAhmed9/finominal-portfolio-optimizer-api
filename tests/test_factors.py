@@ -55,7 +55,7 @@ def test_per_asset_beta_matrix_matches_direct_portfolio_regression():
         ]
     )
     tickers = ["A", "B", "C"]
-    beta_matrix = per_asset_beta_matrix(tickers, dates, asset_returns, market)
+    beta_matrix, _factor_date_range = per_asset_beta_matrix(tickers, dates, asset_returns, market)
 
     w = np.array([0.5, 0.3, 0.2])
     via_shortcut = beta_matrix @ w
@@ -88,7 +88,7 @@ def test_optimize_factor_exposure_maximize_is_linear_program(market):
     aligned = build_return_matrix(tickers, None, market)
     bounds = build_bounds(tickers, None, None, None)
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
-    result, beta_matrix = optimize_factor_exposure(
+    result, beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
@@ -114,7 +114,7 @@ def test_optimize_factor_exposure_minimize_direction(market):
     aligned = build_return_matrix(tickers, None, market)
     bounds = build_bounds(tickers, None, None, None)
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
-    result, beta_matrix = optimize_factor_exposure(
+    result, beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [{"factor": "value", "direction": "minimize", "importance": 1.0}],
     )
@@ -133,7 +133,7 @@ def test_optimize_factor_exposure_weighted_multi_factor_target(market):
     aligned = build_return_matrix(tickers, None, market)
     bounds = build_bounds(tickers, None, None, None)
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
-    result, beta_matrix = optimize_factor_exposure(
+    result, beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [
             {"factor": "momentum", "direction": "maximize", "importance": 3.0},
@@ -157,7 +157,7 @@ def test_optimize_factor_exposure_binding_bounds_prevent_full_concentration(mark
     aligned = build_return_matrix(tickers, None, market)
     bounds = build_bounds(tickers, min_weight_pct=0, max_weight_pct=40, per_security_pct=None)
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
-    result, beta_matrix = optimize_factor_exposure(
+    result, beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
@@ -196,7 +196,7 @@ def test_case6_momentum_exposure_increases(market):
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
     current_weights = np.full(5, 0.2)
 
-    result, beta_matrix = optimize_factor_exposure(
+    result, beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
@@ -224,7 +224,7 @@ def _five_fund_setup(market):
 def test_factor_exposure_respects_volatility_max_when_feasible(market):
     tickers, aligned, bounds, yields = _five_fund_setup(market)
     limits = build_portfolio_limits(None, None, {"max": 10}, None)
-    result, _beta_matrix = optimize_factor_exposure(
+    result, _beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
@@ -237,7 +237,7 @@ def test_factor_exposure_respects_volatility_max_when_feasible(market):
 def test_factor_exposure_respects_max_drawdown_when_feasible(market):
     tickers, aligned, bounds, yields = _five_fund_setup(market)
     limits = build_portfolio_limits(None, 20, None, None)
-    result, _beta_matrix = optimize_factor_exposure(
+    result, _beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
@@ -274,7 +274,7 @@ def test_factor_exposure_respects_combined_bounds_yield_and_drawdown(market):
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
     limits = build_portfolio_limits(None, 25, None, 1.0)  # max_drawdown 25%, min yield 1%
 
-    result, _beta_matrix = optimize_factor_exposure(
+    result, _beta_matrix, _factor_date_range = optimize_factor_exposure(
         tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )

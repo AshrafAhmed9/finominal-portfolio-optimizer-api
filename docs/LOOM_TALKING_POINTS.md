@@ -1,60 +1,60 @@
-# Loom talking points (outline, not a script — say it in your own words)
+# Loom talking points (outline, not a script - say it in your own words)
 
 Target: 3-5 minutes. Structure follows `IMPLEMENTATION_PLAN.md` §11.
 
-## 0:00–0:25 — What it does, and the honest headline
+## 0:00–0:25 - What it does, and the honest headline
 - "REST API replicating Finominal's portfolio optimizer: 5 required strategies
   plus the factor-exposure bonus."
 - **If you got live-tool access working:** state the actual measured result
-  from `scripts/compare_reference.py` — e.g. "N of 5 required cases matched
+  from `scripts/compare_reference.py` - e.g. "N of 5 required cases matched
   within 0.1 points; here's the one that didn't and why." Do not claim a
   number you haven't measured.
 - **If account creation on the live tool is still broken:** say so plainly
-  and immediately, don't bury it — "I wasn't able to create an account on
-  the live tool to run the reference comparison it asks for — I tried
+  and immediately, don't bury it - "I wasn't able to create an account on
+  the live tool to run the reference comparison it asks for - I tried
   multiple browsers and a private window, and I'll follow up with Kaushik
-  about it. Here's what I used instead to validate correctness: 71 tests,
+  about it. Here's what I used instead to validate correctness: 125 tests,
   including analytic closed-form checks and a synthetic-coefficient
   recovery test for the factor regression." This is a stronger opening than
-  hiding the gap — it shows you did the reasoning and were honest about
+  hiding the gap - it shows you did the reasoning and were honest about
   what you could and couldn't verify.
 
-## 0:25–1:15 — Live constrained request
+## 0:25–1:15 - Live constrained request
 - Run case 5 (`examples/case_05_constrained_sharpe.json`) against the running
   API. Point out in the response: the weights, the achieved dividend yield
   sitting right at the 2.5% floor, and that all weights are within 5–40%.
 
-## 1:15–2:00 — One code path, briefly
+## 1:15–2:00 - One code path, briefly
 - Walk `/optimize` in `app/main.py`: request → ticker validation → date
-  alignment (`app/data.py` — mention IEFA vs SPY's very different histories
+  alignment (`app/data.py` - mention IEFA vs SPY's very different histories
   and why that matters) → bounds/feasibility check → strategy dispatch →
   response. Keep it to the shape of the pipeline, not a line-by-line read.
 - Mention units convention: percentages at the API boundary, fractions
-  internally — this trips people up if unstated.
+  internally - this trips people up if unstated.
 
-## 2:00–2:45 — Tests and reference comparison
-- Run `pytest -q` live, show it green (71 passing).
+## 2:00–2:45 - Tests and reference comparison
+- Run `pytest -q` live, show it green (125 passing).
 - **If live-tool access worked:** run `python scripts/compare_reference.py`,
   show the actual comparison table. If any case is out of tolerance, say so
   and give your best explanation (data snapshot vs. live tool, a convention
   difference, etc.) rather than hiding it.
-- **If it didn't:** show `tests/test_optimizers.py` instead — the analytic
+- **If it didn't:** show `tests/test_optimizers.py` instead - the analytic
   two-asset minimum-variance fixture, the ERC-equals-inverse-volatility
   special case, and the dense-grid cross-check for `minimize_drawdown`. Walk
   through one of them briefly so it's clear these aren't just "tests that
   pass" but tests against an independently-known correct answer.
 - Mention the synthetic-coefficient recovery test for the factor regression
-  (`tests/test_factors.py`) — fit against data generated from known betas,
+  (`tests/test_factors.py`) - fit against data generated from known betas,
   confirms the regression actually recovers them.
 
-## 2:45–3:15 — Infeasible request + supplied returns
+## 2:45–3:15 - Infeasible request + supplied returns
 - Hit an infeasible constraint (e.g. `min_dividend_yield: 50`) and show the
   clear 422 naming the max achievable yield, not a generic failure.
-- Show `examples/inline_returns_request.json` — supplied returns actually
+- Show `examples/inline_returns_request.json` - supplied returns actually
   change the output, not just accepted and ignored.
 
-## 3:15–4:00 — Factor bonus, limitations, what's next
-- Case 6: optimized momentum beta exceeds current — note the assignment
+## 3:15–4:00 - Factor bonus, limitations, what's next
+- Case 6: optimized momentum beta exceeds current - note the assignment
   explicitly does NOT require weight parity here (only 3 factors vs. the
   live tool's broader model).
 - One or two honest limitations: risk-free rate is a stated default (0%),
@@ -64,8 +64,9 @@ Target: 3-5 minutes. Structure follows `IMPLEMENTATION_PLAN.md` §11.
 
 ## Things to actually be able to explain if asked
 - Why date intersection matters (IEFA starts 2012, SPY starts 1993).
-- ERC risk parity vs. naive inverse-volatility (they coincide only in the
-  two-asset, zero-correlation case).
+- ERC risk parity vs. naive inverse-volatility (they coincide for any two
+  assets regardless of correlation - the covariance term cancels out
+  algebraically - but generally differ once you have three or more).
 - Arithmetic vs. geometric (CAGR) return conventions, and where each is used.
 - Why max drawdown reflects starting capital (a -10%/+10% sequence is NOT
   back to 0% drawdown at the trough).

@@ -1,54 +1,60 @@
-# What's left (everything below genuinely needs you)
+# What's left
 
-Everything buildable without live-tool access or a human is done: API, all 6
-strategies, 71 passing tests, error handling, README, example requests, a
-fresh-checkout verification. This is what remains, in order.
+Status as of the last update: the code is done, including a full pass fixing
+every issue raised in `SUBMISSION_REVIEW.md` (R1-R10 - a critical constraint-
+bypass bug, two valid-request crashes, validation gaps, a Sharpe-ratio
+degeneracy, a broken reference-comparison harness, several weak tests, and
+solver bookkeeping issues). 125 tests pass. Public repo is live and pushed:
+https://github.com/AshrafAhmed9/finominal-portfolio-optimizer-api. Four
+Swagger screenshots covering equal weights, constrained maximize_sharpe, and
+the factor-exposure bonus are committed and embedded in the README.
 
-## 1. Try once more to capture the live tool's reference outputs (~10 min cap)
-Account creation was failing with a generic error as of the last update. Try
-once more (incognito window, different browser, different email) — if it
-works, go to https://finominal.com/portfolio-optimizer/US and run the 6
-scenarios from `IMPLEMENTATION_PLAN.md` §4 / the assignment doc:
-- Screenshot the Review Results tab (and Comparison tab for case 6) into
-  `docs/reference/` (e.g. `case_01_equal_weights.png`).
-- Copy `tests/golden/scenarios.template.json` to `tests/golden/scenarios.json`
-  and fill in each `expected_weights` value from what the tool shows.
-- Then run:
-  ```bash
-  source .venv/bin/activate
-  python scripts/compare_reference.py
-  pytest tests/test_reference.py -v
-  ```
-  If something's out of tolerance, try the risk-free rate first — see README
-  "Methodology" and `ANNUAL_RISK_FREE_RATE` in `app/metrics.py`.
-- Then update the README's status paragraph at the top with the real result.
+This is what's actually left, in order:
 
-**If it's still broken, don't burn more time on it** — email
-kaushik@finominal.com about the signup error (legitimate, worth flagging),
-and move on. The README already documents this fallback honestly: the 71
-tests (analytic fixtures, feasible-baseline checks, synthetic-coefficient
-recovery for the factor regression) are the correctness evidence in place
-of a live-tool match. Nothing else needs to change.
+## 1. Record the Loom (3-5 min)
+Script is in `docs/LOOM_SCRIPT.md` (verbatim lines, screen cues, and a
+caption track). Loom's own recorder is free up to 5 minutes per video and
+avoids their upload paywall; OBS + a shared Google Drive link is the
+documented fallback if you'd rather edit it yourself - either is fine, see
+the earlier conversation for the tradeoffs.
 
-## 2. Screenshots for the submission
-At least 3 strategies, showing the running API returning correct output.
-`docs/reference/live_case_*.json` already has 5 real captured responses from
-curl if you want a starting point — but the deliverable wants screenshots
-(e.g. of the terminal or Swagger UI at `/docs`), not raw JSON files.
+**Before recording, re-run the demo once against the current code** - some
+of the numbers referenced in the script may have shifted slightly from the
+R1-R10 fixes (in particular, the factor-exposure strategy now actually
+enforces every constraint type, not just dividend yield, and the response
+includes a new `meta.factor_date_range` field). Nothing observed so far
+changed the specific numbers already in the script (Sharpe 0.82→0.90,
+momentum beta 0.13→0.19), but confirm on camera rather than trusting stale
+numbers.
 
-## 3. Record the Loom (3-5 min)
-Outline in `docs/LOOM_TALKING_POINTS.md`. Say it in your own words.
+## 2. Optional: one more attempt at live-tool reference capture (~10 min cap)
+If the account-creation error from before is still blocking you, don't
+spend more time on it - the README already documents this honestly and the
+test suite is the correctness evidence in its place. If you do get in, the
+six scenarios and the exact validation this needs to satisfy are described
+in `tests/golden/README.md`; `scripts/compare_reference.py` and
+`tests/test_reference.py` share one validation module
+(`scripts/reference_fixtures.py`) so a malformed or incomplete capture
+cannot silently report a false pass.
 
-## 4. Push and submit
-- Create a public GitHub repo, push this code.
-- Send: repo link, screenshots, Loom link, to kaushik@finominal.com within
-  the 12-hour window (check how much you have left).
+## 3. Fill out the Submission Form
+https://docs.google.com/forms/d/e/1FAIpQLSfJr12o6Owh3U492Pws-LK4PeQZnxxFC956HJKsTDxCDDyjhw/viewform
+- Email, name
+- GitHub link: https://github.com/AshrafAhmed9/finominal-portfolio-optimizer-api
+- Loom (or Drive) video link
+
+## 4. Optional: reply to Kaushik about the signup error
+Not required for submission, but worth sending whenever - see the draft
+from earlier in the conversation.
 
 ## If you get stuck
 - Server won't start: check `Data.xlsx` is present at the repo root, or set
   `FINOMINAL_DATA_PATH` env var.
-- A live-tool case doesn't match: check `meta.conventions` and
-  `meta.date_range` in that case's response first — most mismatches trace to
-  a convention difference (annualization, rf) or a different data window,
-  not a bug. The README's Methodology section explains every convention
-  choice and where to change it.
+- `pytest -q -rs` should show 125 passed, 1 skipped (the skip is the
+  reference-fixtures test, expected until `tests/golden/scenarios.json`
+  exists).
+- A live-tool case doesn't match, if you do get reference access: check
+  `meta.conventions` and `meta.date_range` in that case's response first -
+  most mismatches trace to a convention difference (annualization, rf) or a
+  different data window, not a bug. The README's Methodology section
+  explains every convention choice and where to change it.

@@ -68,19 +68,34 @@ def per_asset_beta_matrix(
     dates,
     return_matrix: np.ndarray,
     market: MarketData,
-) -> np.ndarray:
+):
     """Regresses each asset's own return series on the factors (all over the
     same common portfolio-date window, intersected with factor dates), and
-    returns a (3, n_assets) matrix of [momentum; value; size] betas, one
-    column per asset. Portfolio betas for any weight vector w are then this
-    matrix @ w - verified equal to a direct regression in tests."""
+    returns (beta_matrix, factor_date_range). beta_matrix is (3, n_assets):
+    [momentum; value; size] rows, one column per asset. Portfolio betas for
+    any weight vector w are then beta_matrix @ w - verified equal to a
+    direct regression in tests.
+
+    factor_date_range is {"start", "end", "observations"} for the actual
+    regression window - this is the intersection of the portfolio's date
+    range with the Factor Returns sheet's own range (which ends a few days
+    before the fund data does), so it's reported separately rather than
+    conflated with the wider portfolio meta.date_range (R9).
+    """
     n = len(tickers)
     betas = np.zeros((3, n))
+    factor_dates = None
     for j in range(n):
-        X, y, _dates = build_factor_matrix(dates, return_matrix[:, j], market)
+        X, y, regression_dates = build_factor_matrix(dates, return_matrix[:, j], market)
         _alpha, b = regress_betas(X, y)
         betas[:, j] = [b.momentum, b.value, b.size]
-    return betas
+        factor_dates = regression_dates  # identical across assets: same portfolio/factor date intersection
+    factor_date_range = {
+        "start": str(factor_dates.min().date()),
+        "end": str(factor_dates.max().date()),
+        "observations": len(factor_dates),
+    }
+    return betas, factor_date_range
 
 
 def optimize_factor_exposure(
@@ -94,8 +109,10 @@ def optimize_factor_exposure(
     factor_targets: list[dict],
 ):
     """factor_targets: [{"factor": "momentum", "direction": "maximize", "importance": 1.0}, ...]
-    Returns (OptimizationResult, per_asset_beta_matrix) - the caller uses the
-    beta matrix to report both current and optimized betas without re-regressing.
+    Returns (OptimizationResult, beta_matrix, factor_date_range) - the caller
+    uses the beta matrix to report both current and optimized betas without
+    re-regressing, and factor_date_range to disclose the regression's actual
+    (narrower) date window separately from the portfolio's own date range.
 
     The factor objective is linear in w (beta_matrix @ w), so when every
     active constraint is also linear (bounds, sum=1, dividend yield) this
@@ -117,7 +134,7 @@ def optimize_factor_exposure(
         if t.get("importance", 1.0) <= 0:
             raise ConstraintError(f"importance for {t['factor']!r} must be positive")
 
-    beta_matrix = per_asset_beta_matrix(tickers, dates, return_matrix, market)  # (3, n)
+    beta_matrix, factor_date_range = per_asset_beta_matrix(tickers, dates, return_matrix, market)  # (3, n)
 
     total_importance = sum(t.get("importance", 1.0) for t in factor_targets)
     objective_row = np.zeros(len(tickers))
@@ -143,7 +160,7 @@ def optimize_factor_exposure(
             return float(objective_row @ w)
 
         result = _run_multistart(objective, bounds, return_matrix, yields, limits)
-        return result, beta_matrix
+        return result, beta_matrix, factor_date_range
 
     A_ub, b_ub = None, None
     if limits.min_dividend_yield is not None:
@@ -179,4 +196,4 @@ def optimize_factor_exposure(
         starts_tried=1,
         iterations=0,
     )
-    return result, beta_matrix
+    return result, beta_matrix, factor_date_range

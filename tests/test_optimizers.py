@@ -72,11 +72,16 @@ def test_min_volatility_beats_equal_weight_feasible_baseline():
 
 
 def test_risk_parity_two_asset_equals_inverse_volatility():
-    # With zero correlation, two-asset ERC weights equal inverse-volatility
-    # weights exactly - the textbook special case.
+    # R9 correction: two-asset ERC equals inverse-volatility weighting in
+    # general, NOT only at zero correlation - the covariance cross-term
+    # cancels algebraically when solving w1*(Sigma w)_1 = w2*(Sigma w)_2,
+    # leaving w1/w2 = sigma2/sigma1 for any correlation that keeps
+    # portfolio variance positive. Run this at a genuinely nonzero
+    # correlation specifically so the test can't be satisfied by accident.
     rng = np.random.default_rng(4)
-    r = _two_asset_returns(rng, vol_a=0.01, vol_b=0.04, corr=0.0)
+    r = _two_asset_returns(rng, n=3000, vol_a=0.01, vol_b=0.04, corr=0.4)
     cov = covariance_matrix(r)
+    assert abs(cov[0, 1]) > 1e-6  # sanity: the correlation really is nonzero here
     result = risk_parity(["A", "B"], _unbounded(2), r, np.zeros(2), NO_LIMITS, cov)
     inv_vol = 1 / np.sqrt(np.diag(cov))
     expected = inv_vol / inv_vol.sum()

@@ -13,57 +13,31 @@ happened. Please try again.") across multiple attempts, browsers, and a
 private window, which blocked capturing the six required live-tool
 comparisons. In place of that comparison, correctness is demonstrated with:
 
-- **71 passing tests**, including analytic closed-form fixtures for
-  minimum-variance (two-asset) and equal-risk-contribution risk parity
-  (two-asset inverse-volatility special case, and a three-asset equal-
-  contribution check), a dense-grid cross-check for the non-convex
-  `minimize_drawdown` strategy, and a synthetic-coefficient recovery test
-  for the factor regression (fit against returns generated from *known*
-  betas, confirming the regression recovers them).
-- Every strategy's output independently re-verified against a feasible
-  baseline (e.g. minimum volatility must not exceed equal-weight variance).
+- **125 passing tests**, including analytic closed-form fixtures for
+  minimum-variance (two-asset, general correlated case) and equal-risk-
+  contribution risk parity (a two-asset inverse-volatility case and a
+  three-asset equal-contribution check), a dense-grid cross-check for the
+  non-convex `minimize_drawdown` strategy, a synthetic-coefficient recovery
+  test for the factor regression (fit against returns generated from
+  *known* betas, confirming the regression recovers them), and mocked
+  solver-failure cases (nonconvergence, missing metadata, nonfinite or
+  wildly out-of-bounds results) that a real solver rarely produces on its
+  own but the code must still handle correctly.
+- `minimize_volatility` and `maximize_sharpe` are checked against a feasible
+  equal-weight baseline (the optimum must not be worse than it); this is
+  not yet done for every strategy.
 - All constraint types (bounds, dividend yield, CAGR, drawdown, volatility
-  range) exercised end-to-end through the API, including a case that is
-  provably infeasible and correctly rejected rather than silently producing
-  invalid weights.
+  range) exercised end-to-end through the API, including for the bonus
+  factor-exposure strategy, which previously enforced only the dividend
+  yield constraint (see "Known deviations" below) - and including cases
+  that are correctly rejected instead of silently producing invalid weights.
 
 `tests/golden/scenarios.json` and `scripts/compare_reference.py` are built
 and ready - if live-tool access becomes available, capturing the six
-scenarios and dropping the weights in is the only remaining step; no code
-changes are needed. See `tests/golden/README.md`.
-
-## Screenshots
-
-The running API via the auto-generated Swagger UI (`/docs`), covering the
-required equal-weights and constrained-Sharpe cases plus the factor-exposure
-bonus. Full responses for these and two more cases are also saved as JSON
-in `docs/reference/`.
-
-**Swagger UI overview:**
-
-![Swagger docs](screenshots/01_swagger_docs.png)
-
-**Case 1 - equal weights (IEFA 25% / SPY 75%):**
-
-![Case 1 equal weights](screenshots/02_case1_equal_weights.png)
-
-**Case 5 - maximize Sharpe with dividend yield and weight bounds:**
-
-![Case 5 request](screenshots/03a_case5_constrained_sharpe_request.png)
-![Case 5 response](screenshots/03b_case5_constrained_sharpe_response.png)
-
-The dividend yield floor (2.5%) and weight bounds (5-40%) are both binding
-in the result - VEA sits at exactly 5%, AGG at exactly 40%, and the
-optimized yield lands at exactly 2.5%.
-
-**Case 6 (bonus) - factor exposure, maximize Momentum:**
-
-![Case 6 request](screenshots/04a_case6_factor_exposure_request.png)
-![Case 6 response](screenshots/04b_case6_factor_exposure_response.png)
-
-Momentum beta increases from 0.132 (current, equal-weight) to 0.187
-(optimized) - the pass condition the assignment specifies for this case,
-since it explicitly does not require weight parity with the live tool here.
+scenarios and filling in the expected weights should be the only remaining
+step, validated by a shared fixture-validation module
+(`scripts/reference_fixtures.py`) so a malformed or incomplete capture
+cannot silently report a false pass. See `tests/golden/README.md`.
 
 ## Setup
 
@@ -80,6 +54,43 @@ uvicorn app.main:app --reload
 ```
 
 Health check: `curl http://127.0.0.1:8000/health`
+
+## Screenshots
+
+The running API via the auto-generated Swagger UI (`/docs`), covering the
+required equal-weights and constrained-Sharpe cases plus the factor-exposure
+bonus. All six assignment scenarios' full request/response pairs, captured
+locally from this API (not the live tool - see the status note above), are
+also saved as JSON in `docs/reference/local_case_0N_*.json`.
+
+**Swagger UI overview:**
+
+![Swagger docs](screenshots/01_swagger_docs.png)
+
+**Case 1 - equal weights (IEFA 25% / SPY 75%):**
+
+![Case 1 equal weights](screenshots/02_case1_equal_weights.png)
+
+**Case 5 - maximize Sharpe with dividend yield and weight bounds:**
+
+![Case 5 request](screenshots/03a_case5_constrained_sharpe_request.png)
+![Case 5 response](screenshots/03b_case5_constrained_sharpe_response.png)
+
+The dividend yield floor (2.5%) and weight bounds (5-40%) are both binding
+in the result - VEA sits at exactly 5%, AGG at exactly 40%, and the
+optimized yield lands at exactly 2.5%. The response screenshot above is cut
+off before VEA/SPY and the yield metric come into view (Swagger's panel
+doesn't fit the full response on screen) - the complete, full-precision
+response is in [`docs/reference/local_case_05_max_sharpe_constrained.json`](docs/reference/local_case_05_max_sharpe_constrained.json).
+
+**Case 6 (bonus) - factor exposure, maximize Momentum:**
+
+![Case 6 request](screenshots/04a_case6_factor_exposure_request.png)
+![Case 6 response](screenshots/04b_case6_factor_exposure_response.png)
+
+Momentum beta increases from 0.132 (current, equal-weight) to 0.187
+(optimized) - the pass condition the assignment specifies for this case,
+since it explicitly does not require weight parity with the live tool here.
 
 ## Example requests
 
@@ -146,6 +157,22 @@ matching global endpoint for that ticker; the other endpoint still inherits
 the global default. `max_drawdown: 20` means "no worse than a 20% loss," not
 a target.
 
+### Units, precisely
+
+The API mixes percentages and decimal fractions across its boundary - this
+is intentional (it matches how each field is naturally expressed and used
+elsewhere), but it's documented here rather than left for a reviewer to
+infer:
+
+| Field | Unit |
+|---|---|
+| Request: `securities[].weight` | percentage (0-100) |
+| Request: `constraints.*` (all bounds/limits) | percentage |
+| Response: `allocation_changes[].current_weight` / `optimized_weight` / `change` | percentage |
+| Response: `meta.metrics.*.cagr` / `volatility` / `max_drawdown` / `dividend_yield` | decimal fraction (0.025 = 2.5%) |
+| Response: `factor_betas.*` | dimensionless (a regression coefficient, not a percentage) |
+| `GET /securities` `dividend_yield` | decimal fraction |
+
 ## Methodology (stated explicitly, not silently assumed)
 
 - **Portfolio return series:** constant-weight, `r_p[t] = w . R[t, :]`.
@@ -178,10 +205,16 @@ a target.
   the request. See `app/data.py` and `tests/test_data.py`.
 - **Risk parity:** true equal-risk-contribution (ERC) - minimizes the
   dispersion of each asset's fractional contribution to total portfolio
-  variance, not naive inverse-volatility (which only coincides with ERC in
-  the two-asset, zero-correlation special case - see
-  `tests/test_optimizers.py::test_risk_parity_two_asset_equals_inverse_volatility`
-  vs. `test_risk_parity_three_asset_equal_contributions`).
+  variance, not naive inverse-volatility. For exactly two assets these
+  coincide in general (the covariance cross-term cancels algebraically when
+  solving `w1*(Sigma w)_1 = w2*(Sigma w)_2`, leaving `w1/w2 = sigma2/sigma1`
+  regardless of correlation - correlation is not required to be zero, only
+  portfolio variance must stay positive, which excludes the degenerate case
+  of near-perfect anticorrelation at the specific ratio that would zero out
+  the portfolio's variance). With three or more assets, or when correlations
+  are unequal across pairs, ERC and inverse-volatility generally differ -
+  see `tests/test_optimizers.py::test_risk_parity_two_asset_equals_inverse_volatility`
+  (now run at a nonzero correlation) vs. `test_risk_parity_three_asset_equal_contributions`.
 - **Minimize drawdown:** non-convex and non-smooth; solved via deterministic
   multi-start SLSQP (fixed RNG seed 42) and cross-checked in tests against a
   dense grid search on a two-asset fixture.
@@ -195,7 +228,38 @@ a target.
   nonlinear search. Per the assignment, case 6 is **not** expected to match
   the live tool's exact weights (it uses a broader internal factor model
   than this build's three factors) - the pass condition tested is that
-  optimized momentum beta strictly exceeds the current portfolio's.
+  optimized momentum beta strictly exceeds the current portfolio's. When a
+  nonlinear portfolio-level limit (min CAGR, max drawdown, or a volatility
+  range) is also requested, the same linear factor objective is instead
+  optimized through the same constrained nonlinear solver the other
+  strategies use, since the LP path alone can't express those constraints -
+  see "Known deviations" below. The regression's own date window is
+  reported separately as `meta.factor_date_range`, since the Factor Returns
+  sheet ends a few days earlier than the fund data and so covers a slightly
+  narrower range than the portfolio's own `meta.date_range`.
+
+## Known deviations and things found and fixed during review
+
+An adversarial review of this codebase (kept in `SUBMISSION_REVIEW.md`)
+found a real, non-cosmetic bug: the `optimize_factor_exposure` strategy
+enforced only the dividend-yield constraint and silently ignored min CAGR,
+max drawdown, and the volatility range when requested alongside it,
+returning a `200` with weights that violated the requested limit rather
+than an error. That's fixed - the strategy now routes through the shared
+constrained solver whenever a nonlinear limit is active, and every strategy
+(including the linear-program path) runs one final shared feasibility check
+before its weights are ever returned. The review also caught two
+valid-request crashes (a single-security request, and a request with every
+weight pinned by equal min/max bounds), several validation gaps (`NaN`/
+`Infinity` as JSON strings, unknown constraint fields, malformed calendar
+dates), a Sharpe-ratio degeneracy (a near-constant return series computing
+an astronomical fake Sharpe instead of the intended undefined result), and
+four tests that asserted less than their names claimed. All of it is fixed,
+with a regression test for each specific defect - see the git history for
+the full detail per fix. Recording this here rather than fixing it silently
+is deliberate: a mistake that gets caught and corrected on the record is
+better evidence of a careful process than a repo that never admits to
+having had one.
 
 ## Error handling
 
@@ -211,20 +275,32 @@ specific reason, not "optimization failed":
 ```
 
 Unknown tickers, unsupported strategies, mismatched weight sums, mixed
-inline/bundled returns, non-finite values, and returns ≤ -100% (an
-unrepresentable "more than total loss" in this simple-return model) are all
-rejected with a specific 422, never silently coerced.
+inline/bundled returns, non-finite values, unknown request fields, malformed
+calendar dates, and returns ≤ -100% (an unrepresentable "more than total
+loss" in this simple-return model) are all rejected with a specific 422,
+never silently coerced.
+
+A request whose numerical solver never converges (rare, but possible for a
+tightly bounded non-convex problem like `minimize_drawdown`) returns a
+distinct **500 `optimization_failed`**, not 422 - the search failing to find
+an answer is not the same claim as the constraints being proven impossible,
+and conflating the two would misrepresent a solver limitation as a fact
+about the request.
 
 ## Testing
 
 ```bash
-pytest -q                        # 71 tests: data, metrics, optimizers, constraints, factors, API
+pytest -q -rs                    # 125 tests: data, metrics, optimizers, constraints, factors, API, solver-failure mocks
 python scripts/compare_reference.py   # live-tool comparison (needs tests/golden/scenarios.json - see that folder's README)
 ```
 
-Coverage highlights: analytic two-asset minimum-variance and ERC fixtures,
+Coverage highlights: analytic two-asset minimum-variance and ERC fixtures
+(the general correlated case, not just the zero-correlation special case),
 a dense-grid cross-check for minimize-drawdown, a synthetic-coefficient
-recovery test for the factor regression, and API-level checks that supplied
+recovery test for the factor regression, mocked solver-failure cases
+(total nonconvergence, nonfinite/wildly-out-of-bounds "success", missing
+result metadata), a dedicated fixture-validation test suite for the
+reference-comparison harness itself, and API-level checks that supplied
 inline returns actually change the result (not just accepted and ignored).
 
 ## Known limitations / what I'd do with more time
@@ -241,6 +317,12 @@ inline returns actually change the result (not just accepted and ignored).
   non-convex); the deterministic multi-start approach is cross-checked
   against a grid search but a dense global search was out of scope for the
   time budget.
+- Feasibility of `min_cagr`, `max_drawdown`, and `volatility_range` can't be
+  certified analytically the way dividend yield can (that one's a linear
+  program with a provable maximum). A request whose numerical search never
+  converges returns `500 optimization_failed` - an honest "the search
+  didn't find an answer," not a claim that no answer exists. Only dividend
+  yield and weight-bound infeasibility come back as a certified `422`.
 - No persistence, auth, or deployment config - out of scope for a
   single-machine take-home per the assignment's own tips.
 
@@ -249,7 +331,8 @@ inline returns actually change the result (not just accepted and ignored).
 ```
 app/            FastAPI app, data loading, metrics, constraints, optimizers, factor regression
 tests/          pytest suite (data, metrics, optimizers, constraints, factors, API, reference)
-scripts/        compare_reference.py - live-tool comparison report
+scripts/        compare_reference.py, reference_fixtures.py - live-tool comparison + shared fixture validation
 examples/       runnable request bodies
-docs/           reference screenshots (once captured)
+docs/           reference JSON evidence, Loom script, screenshots
+screenshots/    Swagger UI captures embedded in this README
 ```
