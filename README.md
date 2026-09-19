@@ -32,6 +32,39 @@ and ready - if live-tool access becomes available, capturing the six
 scenarios and dropping the weights in is the only remaining step; no code
 changes are needed. See `tests/golden/README.md`.
 
+## Screenshots
+
+The running API via the auto-generated Swagger UI (`/docs`), covering the
+required equal-weights and constrained-Sharpe cases plus the factor-exposure
+bonus. Full responses for these and two more cases are also saved as JSON
+in `docs/reference/`.
+
+**Swagger UI overview:**
+
+![Swagger docs](screenshots/01_swagger_docs.png)
+
+**Case 1 - equal weights (IEFA 25% / SPY 75%):**
+
+![Case 1 equal weights](screenshots/02_case1_equal_weights.png)
+
+**Case 5 - maximize Sharpe with dividend yield and weight bounds:**
+
+![Case 5 request](screenshots/03a_case5_constrained_sharpe_request.png)
+![Case 5 response](screenshots/03b_case5_constrained_sharpe_response.png)
+
+The dividend yield floor (2.5%) and weight bounds (5-40%) are both binding
+in the result - VEA sits at exactly 5%, AGG at exactly 40%, and the
+optimized yield lands at exactly 2.5%.
+
+**Case 6 (bonus) - factor exposure, maximize Momentum:**
+
+![Case 6 request](screenshots/04a_case6_factor_exposure_request.png)
+![Case 6 response](screenshots/04b_case6_factor_exposure_response.png)
+
+Momentum beta increases from 0.132 (current, equal-weight) to 0.187
+(optimized) - the pass condition the assignment specifies for this case,
+since it explicitly does not require weight parity with the live tool here.
+
 ## Setup
 
 Tested with **Python 3.12** (see `requirements.txt` for the exact pinned
