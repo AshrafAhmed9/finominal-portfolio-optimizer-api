@@ -4,3 +4,12 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 *.egg-info/
+
+# Internal planning/review/recording-prep docs - kept locally for my own
+# reference, not part of the public submission.
+/IMPLEMENTATION_PLAN.md
+/NEXT_STEPS.md
+/PLAN_REVIEW.md
+/SUBMISSION_REVIEW.md
+/docs/LOOM_SCRIPT.md
+/docs/LOOM_TALKING_POINTS.md

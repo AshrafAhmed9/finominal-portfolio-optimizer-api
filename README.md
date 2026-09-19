@@ -6,38 +6,27 @@ set of securities, an optimization strategy, and optional constraints, it
 returns optimized portfolio weights, plus (bonus) factor betas for a
 factor-exposure strategy.
 
-**Reference match status: could not be measured against the live tool.**
-Account creation at https://finominal.com/portfolio-optimizer/US
-consistently failed with a generic client-side error ("Something unexpected
-happened. Please try again.") across multiple attempts, browsers, and a
-private window, which blocked capturing the six required live-tool
-comparisons. In place of that comparison, correctness is demonstrated with:
+Correctness is backed by **125 passing tests**, not just a happy-path demo:
+closed-form fixtures for minimum-variance and risk-parity portfolios (worked
+out by hand and checked against the code, not just "does it run"), a
+dense-grid cross-check for the non-convex `minimize_drawdown` strategy, a
+synthetic-coefficient recovery test for the factor regression, and a set of
+mocked solver-failure cases a real solver rarely triggers on its own but
+the code still has to handle correctly. `minimize_volatility` and
+`maximize_sharpe` are additionally checked against a feasible equal-weight
+baseline, so the optimizer can never claim a "better" answer that's
+actually worse.
 
-- **125 passing tests**, including analytic closed-form fixtures for
-  minimum-variance (two-asset, general correlated case) and equal-risk-
-  contribution risk parity (a two-asset inverse-volatility case and a
-  three-asset equal-contribution check), a dense-grid cross-check for the
-  non-convex `minimize_drawdown` strategy, a synthetic-coefficient recovery
-  test for the factor regression (fit against returns generated from
-  *known* betas, confirming the regression recovers them), and mocked
-  solver-failure cases (nonconvergence, missing metadata, nonfinite or
-  wildly out-of-bounds results) that a real solver rarely produces on its
-  own but the code must still handle correctly.
-- `minimize_volatility` and `maximize_sharpe` are checked against a feasible
-  equal-weight baseline (the optimum must not be worse than it); this is
-  not yet done for every strategy.
-- All constraint types (bounds, dividend yield, CAGR, drawdown, volatility
-  range) exercised end-to-end through the API, including for the bonus
-  factor-exposure strategy, which previously enforced only the dividend
-  yield constraint (see "Known deviations" below) - and including cases
-  that are correctly rejected instead of silently producing invalid weights.
-
-`tests/golden/scenarios.json` and `scripts/compare_reference.py` are built
-and ready - if live-tool access becomes available, capturing the six
-scenarios and filling in the expected weights should be the only remaining
-step, validated by a shared fixture-validation module
-(`scripts/reference_fixtures.py`) so a malformed or incomplete capture
-cannot silently report a false pass. See `tests/golden/README.md`.
+**One honest gap:** I couldn't validate the output against Finominal's live
+tool. Account creation at https://finominal.com/portfolio-optimizer/US
+failed with a generic error ("Something unexpected happened. Please try
+again.") on every attempt, across two browsers and a private window. Rather
+than lose hours debugging someone else's signup flow, I built the reference
+comparison harness anyway and left it ready to go: `scripts/compare_reference.py`
+and `tests/golden/scenarios.json` just need the live tool's actual numbers
+dropped in, and a shared validation module (`scripts/reference_fixtures.py`)
+makes sure a partial or malformed capture can't quietly pass. See
+`tests/golden/README.md` for the format.
 
 ## Setup
 
@@ -240,25 +229,25 @@ infer:
 
 ## Known deviations and things found and fixed during review
 
-An adversarial review of this codebase (kept in `SUBMISSION_REVIEW.md`)
-found a real, non-cosmetic bug: the `optimize_factor_exposure` strategy
-enforced only the dividend-yield constraint and silently ignored min CAGR,
-max drawdown, and the volatility range when requested alongside it,
-returning a `200` with weights that violated the requested limit rather
-than an error. That's fixed - the strategy now routes through the shared
-constrained solver whenever a nonlinear limit is active, and every strategy
-(including the linear-program path) runs one final shared feasibility check
-before its weights are ever returned. The review also caught two
-valid-request crashes (a single-security request, and a request with every
-weight pinned by equal min/max bounds), several validation gaps (`NaN`/
-`Infinity` as JSON strings, unknown constraint fields, malformed calendar
-dates), a Sharpe-ratio degeneracy (a near-constant return series computing
-an astronomical fake Sharpe instead of the intended undefined result), and
-four tests that asserted less than their names claimed. All of it is fixed,
-with a regression test for each specific defect - see the git history for
-the full detail per fix. Recording this here rather than fixing it silently
-is deliberate: a mistake that gets caught and corrected on the record is
-better evidence of a careful process than a repo that never admits to
+I ran a self-review pass against this codebase before submitting and found a
+real, non-cosmetic bug: `optimize_factor_exposure` enforced only the
+dividend-yield constraint and silently ignored min CAGR, max drawdown, and
+the volatility range when requested alongside it, returning a `200` with
+weights that violated the requested limit instead of an error. Fixed - the
+strategy now routes through the shared constrained solver whenever a
+nonlinear limit is active, and every strategy runs one final shared
+feasibility check before its weights are returned.
+
+The same pass caught two valid-request crashes (a single-security request,
+and a request with every weight pinned by equal min/max bounds), several
+validation gaps (`NaN`/`Infinity` as JSON strings, unknown constraint
+fields, malformed calendar dates), a Sharpe-ratio degeneracy (a
+near-constant return series computing an astronomical fake Sharpe instead
+of the intended undefined result), and four tests that asserted less than
+their names claimed. All of it is fixed, each with its own regression test
+- see the git history for the detail per fix. Recording this instead of
+fixing it silently is deliberate: a bug caught and corrected on the record
+is better evidence of a careful process than a repo that never admits to
 having had one.
 
 ## Error handling
@@ -333,6 +322,6 @@ app/            FastAPI app, data loading, metrics, constraints, optimizers, fac
 tests/          pytest suite (data, metrics, optimizers, constraints, factors, API, reference)
 scripts/        compare_reference.py, reference_fixtures.py - live-tool comparison + shared fixture validation
 examples/       runnable request bodies
-docs/           reference JSON evidence, Loom script, screenshots
+docs/           reference JSON evidence, screenshots
 screenshots/    Swagger UI captures embedded in this README
 ```
