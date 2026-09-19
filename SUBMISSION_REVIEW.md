@@ -281,3 +281,33 @@ This is lower priority than R1–R8. Verify meaningful start coverage and bookke
 - [ ] No unsupported claim of exact parity, global optimality, or guaranteed hiring outcome.
 
 **Final assessment:** targeted fixes can materially improve this submission. The strongest remaining reason to select another candidate is not lack of features; it is that an accepted risk constraint can be ignored while the API returns success, and the present evidence checks do not reliably detect that. Fix those failures and complete the required evidence before cosmetic work.
+
+---
+
+## Remediation applied (2026-09-19, commits c8d196f through 43fe482)
+
+Every R1-R10 finding above was reproduced first, then fixed, then covered
+by a new regression test named for the specific defect. Test count went
+71 -> 125 (99 after R1-R5, 114 after R8, 123 after R7, 125 after R10).
+Verified clean at each step with a fresh Python 3.12 venv, `pip install -r
+requirements.txt` only, and (for the final pass) a real HTTP round-trip
+against a freshly booted server, not just TestClient.
+
+| Finding | Status | Where |
+| --- | --- | --- |
+| R1 (constraint bypass, CRITICAL) | Fixed | `app/factors.py` routes through the shared constrained solver whenever a nonlinear limit is set; one final shared feasibility check on every path, including the LP path |
+| R2a (fully-fixed-weights crash) | Fixed | `getattr(result, "nit", 0)` in `app/optimize.py` |
+| R2b (single-asset covariance crash) | Fixed | `np.atleast_2d` in `app/metrics.py::covariance_matrix` |
+| R3 (nonfinite/unknown-field bypass) | Fixed | `StrictModel` base (`extra="forbid"`, `allow_inf_nan=False`) across every request schema; per-security key collision check |
+| R4 (invalid/duplicate dates) | Fixed | strict `YYYY-MM-DD` validator on `InlineReturn.date` before pandas ever sees it |
+| R5 (harness false-PASS bugs) | Fixed | `scripts/reference_fixtures.py`, one shared validation module for both the CLI script and pytest; 12 dedicated unit tests |
+| R6 (incomplete evidence) | Fixed except the live-tool capture itself | case 4 captured, all six unambiguously renamed `local_case_0N_*`; live-tool capture remains blocked by the account-creation error, documented as such throughout |
+| R7 (weak tests, conflated failure semantics) | Fixed | 4 named tests strengthened; new `OptimizationFailedError` (500) distinct from `ConstraintError` (422); found and fixed an additional bug while mocking failures (`np.clip` laundering a nonfinite/wildly-out-of-bounds "success" into a false-valid weight vector) |
+| R8 (Sharpe degeneracy) | Fixed | scale-aware near-zero-variance check in `sharpe_ratio`; ERC seed's `1/sqrt(variance)` guarded against a zero-variance asset |
+| R9 (documentation corrections) | Fixed | risk-parity claim corrected (and the fix verified by strengthening its test to a nonzero-correlation case, not just asserted in prose); overclaims removed; units table added; `meta.factor_date_range` added and documented; stale counts updated throughout; `NEXT_STEPS.md` rewritten to match reality |
+| R10 (solver bookkeeping) | Fixed | genuinely distinct multi-start corners; iteration count reflects the full search, not just the winning candidate's position in it |
+
+Not done, and out of this agent's control: the live-tool reference capture
+itself (account creation on finominal.com fails with a generic client-side
+error) and the actual Loom recording. Both are documented as open items in
+`NEXT_STEPS.md`.
