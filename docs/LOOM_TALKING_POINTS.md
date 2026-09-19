@@ -5,9 +5,19 @@ Target: 3-5 minutes. Structure follows `IMPLEMENTATION_PLAN.md` §11.
 ## 0:00–0:25 — What it does, and the honest headline
 - "REST API replicating Finominal's portfolio optimizer: 5 required strategies
   plus the factor-exposure bonus."
-- State the actual measured result once you've run `scripts/compare_reference.py`
-  — e.g. "N of 5 required cases matched the live tool within 0.1 points; here's
-  the one that didn't and why." **Do not claim a number you haven't measured.**
+- **If you got live-tool access working:** state the actual measured result
+  from `scripts/compare_reference.py` — e.g. "N of 5 required cases matched
+  within 0.1 points; here's the one that didn't and why." Do not claim a
+  number you haven't measured.
+- **If account creation on the live tool is still broken:** say so plainly
+  and immediately, don't bury it — "I wasn't able to create an account on
+  the live tool to run the reference comparison it asks for — I tried
+  multiple browsers and a private window, and I'll follow up with Kaushik
+  about it. Here's what I used instead to validate correctness: 71 tests,
+  including analytic closed-form checks and a synthetic-coefficient
+  recovery test for the factor regression." This is a stronger opening than
+  hiding the gap — it shows you did the reasoning and were honest about
+  what you could and couldn't verify.
 
 ## 0:25–1:15 — Live constrained request
 - Run case 5 (`examples/case_05_constrained_sharpe.json`) against the running
@@ -23,14 +33,19 @@ Target: 3-5 minutes. Structure follows `IMPLEMENTATION_PLAN.md` §11.
   internally — this trips people up if unstated.
 
 ## 2:00–2:45 — Tests and reference comparison
-- Run `pytest -q` live, show it green.
-- Run `python scripts/compare_reference.py`, show the actual comparison
-  table. If any case is out of tolerance, say so and give your best
-  explanation (data snapshot vs. live tool, a convention difference, etc.)
-  rather than hiding it.
-- Mention the dedicated `minimize_drawdown` correctness check (dense grid
-  cross-check on a synthetic two-asset fixture) since there's no required
-  scenario that exercises it directly.
+- Run `pytest -q` live, show it green (71 passing).
+- **If live-tool access worked:** run `python scripts/compare_reference.py`,
+  show the actual comparison table. If any case is out of tolerance, say so
+  and give your best explanation (data snapshot vs. live tool, a convention
+  difference, etc.) rather than hiding it.
+- **If it didn't:** show `tests/test_optimizers.py` instead — the analytic
+  two-asset minimum-variance fixture, the ERC-equals-inverse-volatility
+  special case, and the dense-grid cross-check for `minimize_drawdown`. Walk
+  through one of them briefly so it's clear these aren't just "tests that
+  pass" but tests against an independently-known correct answer.
+- Mention the synthetic-coefficient recovery test for the factor regression
+  (`tests/test_factors.py`) — fit against data generated from known betas,
+  confirms the regression actually recovers them.
 
 ## 2:45–3:15 — Infeasible request + supplied returns
 - Hit an infeasible constraint (e.g. `min_dividend_yield: 50`) and show the

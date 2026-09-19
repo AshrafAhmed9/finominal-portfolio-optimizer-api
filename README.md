@@ -6,16 +6,31 @@ set of securities, an optimization strategy, and optional constraints, it
 returns optimized portfolio weights, plus (bonus) factor betas for a
 factor-exposure strategy.
 
-**Reference match status: not yet measured.** The six required scenarios
-from the assignment are implemented and covered by 66 passing unit/API
-tests against analytic fixtures, but they have not yet been run against the
-live tool - that step requires a human session at
-https://finominal.com/portfolio-optimizer/US to capture the reference
-weights into `tests/golden/scenarios.json` (see that directory's README).
-Once captured, `python scripts/compare_reference.py` prints a per-case
-gap table and `pytest tests/test_reference.py` asserts every case within
-0.1 percentage points. This section will be updated with the actual result
-before submission - it is not being claimed prematurely.
+**Reference match status: could not be measured against the live tool.**
+Account creation at https://finominal.com/portfolio-optimizer/US
+consistently failed with a generic client-side error ("Something unexpected
+happened. Please try again.") across multiple attempts, browsers, and a
+private window, which blocked capturing the six required live-tool
+comparisons. In place of that comparison, correctness is demonstrated with:
+
+- **71 passing tests**, including analytic closed-form fixtures for
+  minimum-variance (two-asset) and equal-risk-contribution risk parity
+  (two-asset inverse-volatility special case, and a three-asset equal-
+  contribution check), a dense-grid cross-check for the non-convex
+  `minimize_drawdown` strategy, and a synthetic-coefficient recovery test
+  for the factor regression (fit against returns generated from *known*
+  betas, confirming the regression recovers them).
+- Every strategy's output independently re-verified against a feasible
+  baseline (e.g. minimum volatility must not exceed equal-weight variance).
+- All constraint types (bounds, dividend yield, CAGR, drawdown, volatility
+  range) exercised end-to-end through the API, including a case that is
+  provably infeasible and correctly rejected rather than silently producing
+  invalid weights.
+
+`tests/golden/scenarios.json` and `scripts/compare_reference.py` are built
+and ready - if live-tool access becomes available, capturing the six
+scenarios and dropping the weights in is the only remaining step; no code
+changes are needed. See `tests/golden/README.md`.
 
 ## Setup
 
@@ -170,7 +185,7 @@ rejected with a specific 422, never silently coerced.
 ## Testing
 
 ```bash
-pytest -q                        # 66 tests: data, metrics, optimizers, constraints, factors, API
+pytest -q                        # 71 tests: data, metrics, optimizers, constraints, factors, API
 python scripts/compare_reference.py   # live-tool comparison (needs tests/golden/scenarios.json - see that folder's README)
 ```
 
@@ -181,10 +196,14 @@ inline returns actually change the result (not just accepted and ignored).
 
 ## Known limitations / what I'd do with more time
 
-- Live-tool reference comparison is not yet run (see the status note at the
-  top) - this is the single biggest open item before submission.
+- Live-tool reference comparison could not be run - account creation on the
+  live tool failed repeatedly with a generic error (see the status note at
+  the top). This is the single biggest open item; the test suite is the
+  fallback evidence.
 - Risk-free rate is currently a global default (0%), not solved for from
-  live-tool evidence; §Methodology above explains why and how to change it.
+  live-tool evidence, since that evidence was unavailable; §Methodology
+  above explains the reasoning and where to change it if it becomes
+  available later.
 - `minimize_drawdown` has no global-optimum guarantee (the problem is
   non-convex); the deterministic multi-start approach is cross-checked
   against a grid search but a dense global search was out of scope for the

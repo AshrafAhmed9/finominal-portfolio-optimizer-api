@@ -4,41 +4,42 @@ Everything buildable without live-tool access or a human is done: API, all 6
 strategies, 71 passing tests, error handling, README, example requests, a
 fresh-checkout verification. This is what remains, in order.
 
-## 1. Capture the live tool's reference outputs (~30-45 min)
-Go to https://finominal.com/portfolio-optimizer/US and run the 6 scenarios
-from `IMPLEMENTATION_PLAN.md` §4 / the assignment doc. For each:
+## 1. Try once more to capture the live tool's reference outputs (~10 min cap)
+Account creation was failing with a generic error as of the last update. Try
+once more (incognito window, different browser, different email) — if it
+works, go to https://finominal.com/portfolio-optimizer/US and run the 6
+scenarios from `IMPLEMENTATION_PLAN.md` §4 / the assignment doc:
 - Screenshot the Review Results tab (and Comparison tab for case 6) into
   `docs/reference/` (e.g. `case_01_equal_weights.png`).
 - Copy `tests/golden/scenarios.template.json` to `tests/golden/scenarios.json`
   and fill in each `expected_weights` value from what the tool shows.
+- Then run:
+  ```bash
+  source .venv/bin/activate
+  python scripts/compare_reference.py
+  pytest tests/test_reference.py -v
+  ```
+  If something's out of tolerance, try the risk-free rate first — see README
+  "Methodology" and `ANNUAL_RISK_FREE_RATE` in `app/metrics.py`.
+- Then update the README's status paragraph at the top with the real result.
 
-## 2. Run the comparison
-```bash
-source .venv/bin/activate
-python scripts/compare_reference.py
-pytest tests/test_reference.py -v
-```
-This prints the actual gap per case. If something's out of tolerance, the
-likely first thing to try is the risk-free rate — see README "Methodology"
-and `ANNUAL_RISK_FREE_RATE` in `app/metrics.py` (a prior public submission
-of this same assignment reported 2% matched better than 0%; untested here).
+**If it's still broken, don't burn more time on it** — email
+kaushik@finominal.com about the signup error (legitimate, worth flagging),
+and move on. The README already documents this fallback honestly: the 71
+tests (analytic fixtures, feasible-baseline checks, synthetic-coefficient
+recovery for the factor regression) are the correctness evidence in place
+of a live-tool match. Nothing else needs to change.
 
-## 3. Update the README's status line
-Replace the "not yet measured" paragraph at the top of `README.md` with the
-actual result once you have it (e.g. "5/5 required cases matched within
-0.1pp; case detail below" or an honest accounting of what didn't match and
-why).
-
-## 4. Screenshots for the submission
+## 2. Screenshots for the submission
 At least 3 strategies, showing the running API returning correct output.
 `docs/reference/live_case_*.json` already has 5 real captured responses from
 curl if you want a starting point — but the deliverable wants screenshots
 (e.g. of the terminal or Swagger UI at `/docs`), not raw JSON files.
 
-## 5. Record the Loom (3-5 min)
+## 3. Record the Loom (3-5 min)
 Outline in `docs/LOOM_TALKING_POINTS.md`. Say it in your own words.
 
-## 6. Push and submit
+## 4. Push and submit
 - Create a public GitHub repo, push this code.
 - Send: repo link, screenshots, Loom link, to kaushik@finominal.com within
   the 12-hour window (check how much you have left).
