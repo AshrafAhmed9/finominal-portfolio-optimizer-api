@@ -164,68 +164,78 @@ infer:
 
 ## Methodology (stated explicitly, not silently assumed)
 
-- **Portfolio return series:** constant-weight, `r_p[t] = w . R[t, :]`.
-- **Annualization:** 252 trading observations/year.
-- **Volatility:** sample standard deviation (`ddof=1`) of daily returns,
-  annualized by `sqrt(252)`.
-- **CAGR:** geometric, compounding the actual observed daily returns:
-  `expm1(sum(log1p(r_p)) * 252 / n)`.
-- **Sharpe ratio:** `(annualized arithmetic mean return - annual risk-free
-  rate) / annualized volatility`. Risk-free rate defaults to **0%** - the
-  assignment explicitly permits this ("you may assume a risk-free rate of 0%
-  or use a standard value"). A prior public submission of this same
-  assignment reported that 2% matched the live tool more closely; that is a
-  hypothesis worth testing once live captures exist, not something this
-  build assumed without evidence. If reference comparison shows a
-  systematic Sharpe-side gap, `ANNUAL_RISK_FREE_RATE` in `app/metrics.py` is
-  the single place to change it.
-- **Max drawdown:** computed on a wealth index that starts at 1.0 and
-  compounds daily returns, so it reflects the starting-capital effect - a
-  portfolio that returns -10% then +10% is NOT back to a 0% drawdown at the
-  trough (see `tests/test_metrics.py::test_max_drawdown_reflects_starting_capital`).
-- **Dividend yield:** linear in weights, `w . y`. GLD's yield cell in
-  `Fund Info` is blank; **this dataset only** treats it as 0.0 and discloses
-  it in `/securities` (`dividend_yield_known: false`) - this is not a
-  general "missing yield = zero" assumption for arbitrary data.
-- **Date alignment:** every calculation inner-joins on date across exactly
-  the tickers in the request. Funds have very different histories (SPY back
-  to 1993, IEFA only from 2012), so a request naming IEFA shortens the
-  common window for every fund in that request - but never for funds not in
-  the request. See `app/data.py` and `tests/test_data.py`.
-- **Risk parity:** true equal-risk-contribution (ERC) - minimizes the
-  dispersion of each asset's fractional contribution to total portfolio
-  variance, not naive inverse-volatility. For exactly two assets these
-  coincide in general (the covariance cross-term cancels algebraically when
-  solving `w1*(Sigma w)_1 = w2*(Sigma w)_2`, leaving `w1/w2 = sigma2/sigma1`
-  regardless of correlation - correlation is not required to be zero, only
-  portfolio variance must stay positive, which excludes the degenerate case
-  of near-perfect anticorrelation at the specific ratio that would zero out
-  the portfolio's variance). With three or more assets, or when correlations
-  are unequal across pairs, ERC and inverse-volatility generally differ -
-  see `tests/test_optimizers.py::test_risk_parity_two_asset_equals_inverse_volatility`
-  (now run at a nonzero correlation) vs. `test_risk_parity_three_asset_equal_contributions`.
-- **Minimize drawdown:** non-convex and non-smooth; solved via deterministic
-  multi-start SLSQP (fixed RNG seed 42) and cross-checked in tests against a
-  dense grid search on a two-asset fixture.
-- **Factor exposure (bonus):** each asset is regressed once against
-  Momentum/Value/Size (OLS via `numpy.linalg.lstsq`); because the design
-  matrix doesn't depend on portfolio weights, any constant-weight
-  portfolio's betas equal `beta_matrix @ w` (verified against a direct
-  regression of the weighted return series in `tests/test_factors.py`).
-  That makes "maximize exposure to factor X subject to linear bounds/yield"
-  a linear program, solved once via `scipy.optimize.linprog` rather than a
-  nonlinear search. Per the assignment, case 6 is **not** expected to match
-  the live tool's exact weights (it uses a broader internal factor model
-  than this build's three factors) - the pass condition tested is that
-  optimized momentum beta strictly exceeds the current portfolio's. When a
-  nonlinear portfolio-level limit (min CAGR, max drawdown, or a volatility
-  range) is also requested, the same linear factor objective is instead
-  optimized through the same constrained nonlinear solver the other
-  strategies use, since the LP path alone can't express those constraints -
-  see "Known deviations" below. The regression's own date window is
-  reported separately as `meta.factor_date_range`, since the Factor Returns
-  sheet ends a few days earlier than the fund data and so covers a slightly
-  narrower range than the portfolio's own `meta.date_range`.
+The portfolio return series is constant-weight: `r_p[t] = w . R[t, :]`.
+Everything else is built on top of that, annualized off 252 trading
+observations a year. Volatility is the sample standard deviation
+(`ddof=1`) of daily returns, scaled by `sqrt(252)`. CAGR is geometric,
+compounding the actual observed daily returns rather than approximating
+from the annualized mean: `expm1(sum(log1p(r_p)) * 252 / n)`. Max drawdown
+runs on a wealth index that starts at 1.0 and compounds daily returns, so
+it reflects the starting-capital effect properly - a portfolio that drops
+10% and then gains 10% is not back to a 0% drawdown at the trough (see
+`tests/test_metrics.py::test_max_drawdown_reflects_starting_capital`).
+
+Sharpe ratio is `(annualized arithmetic mean return - annual risk-free
+rate) / annualized volatility`, with the risk-free rate defaulting to 0%.
+The assignment explicitly allows this ("you may assume a risk-free rate of
+0% or use a standard value"). A prior public submission of this same
+assignment reported that 2% matched the live tool more closely - that's a
+hypothesis worth testing once live captures exist, not something I assumed
+without evidence. If a reference comparison later shows a systematic gap
+on the Sharpe side, `ANNUAL_RISK_FREE_RATE` in `app/metrics.py` is the one
+place to change it.
+
+Dividend yield is linear in weights, `w . y`. GLD's yield cell in `Fund
+Info` is blank, and this dataset only treats it as 0.0, disclosed via
+`dividend_yield_known: false` on `/securities` - it's not a general
+"missing yield defaults to zero" rule for arbitrary data, just what's
+correct for this specific gap.
+
+Date alignment matters more than it looks: every calculation inner-joins
+on date across exactly the tickers in the request. Fund histories differ a
+lot (SPY goes back to 1993, IEFA only starts in 2012), so asking for IEFA
+shortens the common window for every fund in that particular request, but
+never touches funds that weren't asked for. See `app/data.py` and
+`tests/test_data.py`.
+
+Risk parity here means true equal-risk-contribution (ERC): minimizing the
+dispersion of each asset's fractional contribution to total portfolio
+variance, not naive inverse-volatility weighting. For exactly two assets
+the two approaches coincide in general - the covariance cross-term cancels
+algebraically when solving `w1*(Sigma w)_1 = w2*(Sigma w)_2`, leaving
+`w1/w2 = sigma2/sigma1` regardless of correlation. (Correlation doesn't
+need to be zero for that, only for portfolio variance to stay positive,
+which rules out the degenerate case of near-perfect anticorrelation at the
+exact ratio that would zero out the portfolio's variance.) With three or
+more assets, or unequal pairwise correlations, ERC and inverse-volatility
+generally diverge - compare
+`tests/test_optimizers.py::test_risk_parity_two_asset_equals_inverse_volatility`
+(now run at a nonzero correlation) against
+`test_risk_parity_three_asset_equal_contributions`.
+
+Minimize-drawdown is non-convex and non-smooth, so it's solved with
+deterministic multi-start SLSQP (fixed RNG seed 42) and cross-checked in
+tests against a dense grid search on a two-asset fixture.
+
+For the factor-exposure bonus, each asset is regressed once against
+Momentum, Value, and Size (OLS via `numpy.linalg.lstsq`). Because the
+design matrix doesn't depend on portfolio weights, any constant-weight
+portfolio's betas equal `beta_matrix @ w` - verified against a direct
+regression of the weighted return series in `tests/test_factors.py`. That
+turns "maximize exposure to factor X subject to linear bounds and yield"
+into a linear program, solved once via `scipy.optimize.linprog` instead of
+a nonlinear search. Per the assignment, case 6 isn't expected to match the
+live tool's exact weights (it uses a broader internal factor model than
+the three factors here) - the pass condition tested is that optimized
+momentum beta strictly exceeds the current portfolio's. When a nonlinear
+portfolio-level limit is also in the request (min CAGR, max drawdown, or a
+volatility range), the same linear objective gets optimized through the
+constrained nonlinear solver the other strategies use instead, since the
+LP path alone can't express those constraints - see "Known deviations"
+below. The regression's own date window is reported separately as
+`meta.factor_date_range`, since the Factor Returns sheet ends a few days
+before the fund data and so covers a slightly narrower range than the
+portfolio's own `meta.date_range`.
 
 ## Known deviations and things found and fixed during review
 
