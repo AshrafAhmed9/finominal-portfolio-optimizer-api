@@ -102,5 +102,11 @@ def compute_metrics(
 
 
 def covariance_matrix(return_matrix: np.ndarray) -> np.ndarray:
-    """Annualized sample covariance (ddof=1), consistent with annual_volatility."""
-    return np.cov(return_matrix, rowvar=False, ddof=1) * TRADING_DAYS_PER_YEAR
+    """Annualized sample covariance (ddof=1), consistent with annual_volatility.
+
+    Always returns a 2D (n_assets, n_assets) array. np.cov collapses to a
+    0-d scalar for a single-column input, which then breaks any caller doing
+    matrix multiplication or np.diag() on it - np.atleast_2d guards that.
+    """
+    cov = np.cov(return_matrix, rowvar=False, ddof=1) * TRADING_DAYS_PER_YEAR
+    return np.atleast_2d(cov)

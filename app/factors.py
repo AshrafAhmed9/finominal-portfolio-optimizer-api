@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import linprog
 
-from .constraints import Bounds, ConstraintError, check_dividend_yield_feasible
+from .constraints import Bounds, ConstraintError, PortfolioLimits, check_dividend_yield_feasible
 from .data import FACTOR_NAMES, MarketData, build_factor_matrix
 
 BETA_INDEX = {name: i + 1 for i, name in enumerate(FACTOR_NAMES)}  # +1 skips the intercept column
@@ -89,13 +89,21 @@ def optimize_factor_exposure(
     return_matrix: np.ndarray,
     bounds: Bounds,
     yields: np.ndarray,
-    min_dividend_yield: float | None,
+    limits: PortfolioLimits,
     market: MarketData,
     factor_targets: list[dict],
-) -> tuple[np.ndarray, np.ndarray]:
+):
     """factor_targets: [{"factor": "momentum", "direction": "maximize", "importance": 1.0}, ...]
-    Returns (weights, per_asset_beta_matrix) - the caller uses the beta
-    matrix to report both current and optimized betas without re-regressing.
+    Returns (OptimizationResult, per_asset_beta_matrix) - the caller uses the
+    beta matrix to report both current and optimized betas without re-regressing.
+
+    The factor objective is linear in w (beta_matrix @ w), so when every
+    active constraint is also linear (bounds, sum=1, dividend yield) this
+    solves as a linear program via HiGHS. But min_cagr / max_drawdown /
+    volatility_range are nonlinear in w, so when any of those are set the
+    same linear objective is optimized through the shared nonlinear
+    multi-start solver instead - reusing it rather than silently ignoring
+    those limits, which is what this function used to do.
     """
     if not factor_targets:
         raise ConstraintError("optimize_factor_exposure requires at least one factor_targets entry")
@@ -114,19 +122,35 @@ def optimize_factor_exposure(
     total_importance = sum(t.get("importance", 1.0) for t in factor_targets)
     objective_row = np.zeros(len(tickers))
     for t in factor_targets:
-        sign = -1.0 if t["direction"] == "maximize" else 1.0  # linprog minimizes
+        sign = -1.0 if t["direction"] == "maximize" else 1.0  # minimizing convention throughout
         weight = t.get("importance", 1.0) / total_importance
         objective_row += sign * weight * beta_matrix[BETA_INDEX[t["factor"]] - 1]
 
-    if min_dividend_yield is not None:
-        check_dividend_yield_feasible(bounds, yields, min_dividend_yield * 100.0)
+    if limits.min_dividend_yield is not None:
+        check_dividend_yield_feasible(bounds, yields, limits.min_dividend_yield * 100.0)
+
+    has_nonlinear_limit = any(
+        v is not None for v in (limits.min_cagr, limits.max_drawdown_limit, limits.min_volatility, limits.max_volatility)
+    )
+
+    # Local imports to avoid a module-level circular import (optimize.py
+    # does not import factors.py, so this direction is safe, but keeping it
+    # local makes that non-obvious dependency easy to spot at the call site).
+    from .optimize import OptimizationResult, _acceptable, _run_multistart
+
+    if has_nonlinear_limit:
+        def objective(w: np.ndarray) -> float:
+            return float(objective_row @ w)
+
+        result = _run_multistart(objective, bounds, return_matrix, yields, limits)
+        return result, beta_matrix
 
     A_ub, b_ub = None, None
-    if min_dividend_yield is not None:
+    if limits.min_dividend_yield is not None:
         A_ub = np.array([-yields])
-        b_ub = np.array([-min_dividend_yield])
+        b_ub = np.array([-limits.min_dividend_yield])
 
-    result = linprog(
+    lp_result = linprog(
         c=objective_row,
         A_ub=A_ub,
         b_ub=b_ub,
@@ -135,6 +159,24 @@ def optimize_factor_exposure(
         bounds=bounds.as_scipy_bounds(),
         method="highs",
     )
-    if not result.success:
-        raise ConstraintError(f"factor exposure optimization is infeasible: {result.message}")
-    return result.x, beta_matrix
+    if not lp_result.success:
+        raise ConstraintError(f"factor exposure optimization is infeasible: {lp_result.message}")
+
+    weights = np.clip(lp_result.x, bounds.lower, bounds.upper)
+    weights = weights / weights.sum() if weights.sum() > 0 else weights
+    if not _acceptable(weights, return_matrix, yields, bounds, limits):
+        # Defense in depth: the LP's own constraints should already guarantee
+        # this, but every strategy goes through one shared final validator
+        # before its weights are ever returned to a caller.
+        raise ConstraintError(
+            "factor exposure LP solution failed the final feasibility check "
+            "(bounds, sum, and portfolio-level constraints)"
+        )
+    result = OptimizationResult(
+        weights=weights,
+        objective_value=float(lp_result.fun),
+        solver_status="linprog_highs",
+        starts_tried=1,
+        iterations=0,
+    )
+    return result, beta_matrix

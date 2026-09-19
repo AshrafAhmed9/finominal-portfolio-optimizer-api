@@ -140,7 +140,10 @@ def _run_multistart(
             constraints=scipy_constraints,
             options={"maxiter": maxiter, "ftol": 1e-12},
         )
-        total_iterations += result.nit
+        # SciPy's SLSQP result doesn't always carry `nit` - notably when every
+        # variable is pinned by equal min==max bounds, the solver short-circuits
+        # before iterating and the attribute is simply absent (not zero).
+        total_iterations += getattr(result, "nit", 0)
         w = np.clip(result.x, bounds.lower, bounds.upper)
         w = w / w.sum() if w.sum() > 0 else w
         if not result.success:

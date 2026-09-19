@@ -2,9 +2,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.constraints import ConstraintError, build_bounds
+from app.constraints import ConstraintError, build_bounds, build_portfolio_limits
 from app.data import build_factor_matrix
 from app.factors import optimize_factor_exposure, per_asset_beta_matrix, portfolio_betas, regress_betas
+
+NO_LIMITS = build_portfolio_limits(None, None, None, None)
 
 
 def _synthetic_market(rng, n=400):
@@ -86,10 +88,11 @@ def test_optimize_factor_exposure_maximize_is_linear_program(market):
     aligned = build_return_matrix(tickers, None, market)
     bounds = build_bounds(tickers, None, None, None)
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
-    weights, beta_matrix = optimize_factor_exposure(
-        tickers, aligned.dates, aligned.matrix, bounds, yields, None, market,
+    result, beta_matrix = optimize_factor_exposure(
+        tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
+    weights = result.weights
     assert weights.sum() == pytest.approx(1.0)
     assert np.all(weights >= -1e-9)
     # optimum for maximizing a single linear factor under only sum=1 + box
@@ -106,7 +109,7 @@ def test_optimize_factor_exposure_rejects_duplicate_targets(market):
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
     with pytest.raises(ConstraintError):
         optimize_factor_exposure(
-            tickers, aligned.dates, aligned.matrix, bounds, yields, None, market,
+            tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
             [
                 {"factor": "momentum", "direction": "maximize", "importance": 1.0},
                 {"factor": "momentum", "direction": "minimize", "importance": 1.0},
@@ -126,12 +129,85 @@ def test_case6_momentum_exposure_increases(market):
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
     current_weights = np.full(5, 0.2)
 
-    weights, beta_matrix = optimize_factor_exposure(
-        tickers, aligned.dates, aligned.matrix, bounds, yields, None, market,
+    result, beta_matrix = optimize_factor_exposure(
+        tickers, aligned.dates, aligned.matrix, bounds, yields, NO_LIMITS, market,
         [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
     )
+    weights = result.weights
     current_momentum_beta = (beta_matrix @ current_weights)[0]
     optimized_momentum_beta = (beta_matrix @ weights)[0]
     assert optimized_momentum_beta > current_momentum_beta
     assert weights.sum() == pytest.approx(1.0)
     assert np.all(weights >= -1e-9)
+
+
+# --- R1 regression: nonlinear portfolio-level constraints must actually ----
+# --- bind on the factor-exposure strategy, not be silently discarded ------
+
+def _five_fund_setup(market):
+    tickers = ["IEFA", "GLD", "AGG", "VEA", "SPY"]
+    from app.data import build_return_matrix
+
+    aligned = build_return_matrix(tickers, None, market)
+    bounds = build_bounds(tickers, None, None, None)
+    yields = np.array([market.fund(t).dividend_yield for t in tickers])
+    return tickers, aligned, bounds, yields
+
+
+def test_factor_exposure_respects_volatility_max_when_feasible(market):
+    tickers, aligned, bounds, yields = _five_fund_setup(market)
+    limits = build_portfolio_limits(None, None, {"max": 10}, None)
+    result, _beta_matrix = optimize_factor_exposure(
+        tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
+        [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
+    )
+    from app.metrics import annual_volatility, portfolio_returns
+
+    vol = annual_volatility(portfolio_returns(result.weights, aligned.matrix))
+    assert vol <= 0.10 + 1e-6
+
+
+def test_factor_exposure_respects_max_drawdown_when_feasible(market):
+    tickers, aligned, bounds, yields = _five_fund_setup(market)
+    limits = build_portfolio_limits(None, 20, None, None)
+    result, _beta_matrix = optimize_factor_exposure(
+        tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
+        [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
+    )
+    from app.metrics import max_drawdown, portfolio_returns
+
+    mdd = max_drawdown(portfolio_returns(result.weights, aligned.matrix))
+    assert mdd <= 0.20 + 1e-6
+
+
+def test_factor_exposure_rejects_unreachable_min_cagr(market):
+    tickers, aligned, bounds, yields = _five_fund_setup(market)
+    limits = build_portfolio_limits(50, None, None, None)  # 50% CAGR: not achievable by any of these 5 funds
+    with pytest.raises(ConstraintError):
+        optimize_factor_exposure(
+            tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
+            [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
+        )
+
+
+def test_factor_exposure_respects_combined_bounds_yield_and_drawdown(market):
+    tickers, aligned, bounds_full = None, None, None
+    from app.data import build_return_matrix
+
+    tickers = ["IEFA", "GLD", "AGG", "VEA", "SPY"]
+    aligned = build_return_matrix(tickers, None, market)
+    bounds = build_bounds(tickers, min_weight_pct=5, max_weight_pct=40, per_security_pct=None)
+    yields = np.array([market.fund(t).dividend_yield for t in tickers])
+    limits = build_portfolio_limits(None, 25, None, 1.0)  # max_drawdown 25%, min yield 1%
+
+    result, _beta_matrix = optimize_factor_exposure(
+        tickers, aligned.dates, aligned.matrix, bounds, yields, limits, market,
+        [{"factor": "momentum", "direction": "maximize", "importance": 1.0}],
+    )
+    from app.metrics import dividend_yield, max_drawdown, portfolio_returns
+
+    w = result.weights
+    assert w.sum() == pytest.approx(1.0)
+    assert np.all(w >= 0.05 - 1e-6) and np.all(w <= 0.40 + 1e-6)
+    assert dividend_yield(w, yields) >= 0.01 - 1e-6
+    assert max_drawdown(portfolio_returns(w, aligned.matrix)) <= 0.25 + 1e-6

@@ -71,6 +71,93 @@ def test_non_finite_supplied_return_rejected(client):
     assert r.status_code in (400, 422)
 
 
+# --- R3/R4 regressions: nonfinite values, unknown fields, and invalid ------
+# --- calendar dates used to bypass validation instead of being rejected ---
+
+def test_unknown_field_in_constraints_rejected(client):
+    # `max_volatility` isn't a field (it's `volatility_range.max`); this used
+    # to be silently dropped by pydantic's default extra-field handling,
+    # so the constraint was neither applied nor reported as an error.
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 100}],
+        "strategy": "equal_weights",
+        "constraints": {"max_volatility": 0},
+    })
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "constraints",
+    [
+        {"min_cagr": "NaN"},
+        {"max_drawdown": "Infinity"},
+        {"min_dividend_yield": "-Infinity"},
+    ],
+)
+def test_nonfinite_string_constraint_values_rejected(client, constraints):
+    # These are valid JSON strings, not the nonstandard bare NaN/Infinity
+    # tokens - pydantic would otherwise happily coerce them to float and let
+    # NaN comparisons silently bypass every constraint check downstream.
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 100}],
+        "strategy": "equal_weights",
+        "constraints": constraints,
+    })
+    assert r.status_code == 422
+
+
+def test_nonfinite_factor_target_importance_rejected(client):
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 50}, {"ticker": "AGG", "weight": 50}],
+        "strategy": "optimize_factor_exposure",
+        "factor_targets": [{"factor": "momentum", "direction": "maximize", "importance": "Infinity"}],
+    })
+    assert r.status_code == 422
+
+
+def test_conflicting_per_security_keys_after_normalization_rejected(client):
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 50}, {"ticker": "AGG", "weight": 50}],
+        "strategy": "equal_weights",
+        "constraints": {"per_security": {"SPY": {"min": 10}, "spy": {"max": 60}}},
+    })
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "bad_date",
+    ["garbage", "NaT", "", "2020-1-3", "2020-01-03T00:00:00Z", "2020-02-30", "2020/01/03"],
+)
+def test_invalid_calendar_dates_rejected(client, bad_date):
+    # Each of these used to either crash with a raw pandas exception, or
+    # silently pass through and get miscounted as an observation (a
+    # non-canonical form like "2020-1-3" used to duplicate "2020-01-03"
+    # instead of being recognized as the same date, or being rejected).
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 100, "returns": [
+            {"date": bad_date, "total_return": 0.01},
+            {"date": "2020-01-06", "total_return": -0.01},
+        ]}],
+        "strategy": "equal_weights",
+    })
+    assert r.status_code == 422
+
+
+def test_valid_unsorted_inline_dates_are_sorted_and_aligned(client):
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 100, "returns": [
+            {"date": "2020-01-08", "total_return": 0.01},
+            {"date": "2020-01-02", "total_return": -0.02},
+            {"date": "2020-01-06", "total_return": 0.005},
+        ]}],
+        "strategy": "equal_weights",
+    })
+    assert r.status_code == 200, r.json()
+    assert r.json()["meta"]["date_range"]["start"] == "2020-01-02"
+    assert r.json()["meta"]["date_range"]["end"] == "2020-01-08"
+    assert r.json()["meta"]["date_range"]["observations"] == 3
+
+
 def test_mixed_inline_and_bundled_rejected(client):
     r = client.post("/optimize", json={
         "securities": [
@@ -213,12 +300,47 @@ def test_volatility_range_constraint_respected(client):
     assert 5.0 - 0.01 <= vol_pct <= 10.0 + 0.01
 
 
-def test_single_security_portfolio_trivially_100_percent(client):
-    r = client.post("/optimize", json={"securities": [{"ticker": "SPY", "weight": 100}], "strategy": "equal_weights"})
+@pytest.mark.parametrize(
+    "strategy", ["equal_weights", "risk_parity", "minimize_volatility", "maximize_sharpe", "minimize_drawdown"]
+)
+def test_single_security_portfolio_across_strategies(client, strategy):
+    # R2b regression: a single requested security used to crash risk_parity
+    # and minimize_volatility (np.cov collapses to a 0-d scalar for one
+    # column, breaking matrix ops downstream). Every strategy must handle it.
+    r = client.post("/optimize", json={"securities": [{"ticker": "SPY", "weight": 100}], "strategy": strategy})
     assert r.status_code == 200, r.json()
     changes = r.json()["allocation_changes"]
     assert len(changes) == 1
     assert changes[0]["optimized_weight"] == pytest.approx(100.0)
+
+
+@pytest.mark.parametrize(
+    "strategy", ["equal_weights", "risk_parity", "minimize_volatility", "maximize_sharpe", "minimize_drawdown"]
+)
+def test_fully_fixed_weights_across_strategies(client, strategy):
+    # R2a regression: min_weight == max_weight == 50 for both securities
+    # pins every variable, which used to crash on a missing `result.nit`
+    # attribute that SciPy's SLSQP omits (not zeroes) when every variable is
+    # fixed by bounds before the solver ever iterates.
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 50}, {"ticker": "AGG", "weight": 50}],
+        "strategy": strategy,
+        "constraints": {"min_weight": 50, "max_weight": 50},
+    })
+    assert r.status_code == 200, r.json()
+    for a in r.json()["allocation_changes"]:
+        assert a["optimized_weight"] == pytest.approx(50.0, abs=1e-6)
+
+
+def test_fully_fixed_weights_violating_a_limit_returns_structured_error(client):
+    # A fixed allocation that cannot satisfy a portfolio-level limit must
+    # come back as a clear error, not a crash and not a false success.
+    r = client.post("/optimize", json={
+        "securities": [{"ticker": "SPY", "weight": 50}, {"ticker": "AGG", "weight": 50}],
+        "strategy": "maximize_sharpe",
+        "constraints": {"min_weight": 50, "max_weight": 50, "min_dividend_yield": 50},
+    })
+    assert r.status_code == 422
 
 
 def test_infeasible_dividend_yield_returns_clear_422_not_invalid_weights(client):

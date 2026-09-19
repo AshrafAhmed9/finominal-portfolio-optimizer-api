@@ -25,7 +25,6 @@ from .data import DataError, MarketData, build_return_matrix
 from .factors import optimize_factor_exposure
 from .metrics import ANNUAL_RISK_FREE_RATE, compute_metrics, covariance_matrix
 from .optimize import (
-    OptimizationResult,
     equal_weights,
     maximize_sharpe,
     minimize_drawdown,
@@ -176,21 +175,13 @@ def optimize(req: OptimizeRequest):
         result = minimize_drawdown(tickers, bounds, aligned.matrix, yields, limits)
     elif req.strategy == Strategy.optimize_factor_exposure:
         targets = [t.model_dump() for t in req.factor_targets]
-        opt_weights, beta_matrix = optimize_factor_exposure(
+        result, beta_matrix = optimize_factor_exposure(
             tickers, aligned.dates, aligned.matrix, bounds, yields,
-            limits.min_dividend_yield, market, targets,
-        )
-
-        result = OptimizationResult(
-            weights=opt_weights,
-            objective_value=0.0,
-            solver_status="linprog_highs",
-            starts_tried=1,
-            iterations=0,
+            limits, market, targets,
         )
 
         current_betas = beta_matrix @ current_weights
-        optimized_betas = beta_matrix @ opt_weights
+        optimized_betas = beta_matrix @ result.weights
         factor_betas_payload = {
             "current_portfolio": {"momentum": float(current_betas[0]), "value": float(current_betas[1]), "size": float(current_betas[2])},
             "optimized_portfolio": {"momentum": float(optimized_betas[0]), "value": float(optimized_betas[1]), "size": float(optimized_betas[2])},
