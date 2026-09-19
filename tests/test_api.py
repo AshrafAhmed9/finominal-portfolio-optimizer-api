@@ -222,12 +222,33 @@ def test_serialized_weights_satisfy_invariants(client, strategy):
         assert a["security_name"]
 
 
-def test_response_metrics_recompute_from_serialized_weights(client):
+def test_response_metrics_recompute_from_serialized_weights(client, market):
+    # R7 regression: the old version of this test only checked the weight
+    # sum, despite its name claiming to recompute metrics. This actually
+    # rebuilds cagr/volatility/sharpe/max_drawdown/dividend_yield from the
+    # serialized weights via an independent path (app.metrics directly, not
+    # the API) and asserts they match what meta.metrics reported.
+    from app.data import build_return_matrix
+    from app.metrics import compute_metrics
+
     r = client.post("/optimize", json={"securities": FIVE_FUND_EQUAL, "strategy": "minimize_volatility"})
     assert r.status_code == 200
     body = r.json()
+
+    tickers = [a["ticker"] for a in body["allocation_changes"]]
     weights = np.array([a["optimized_weight"] for a in body["allocation_changes"]]) / 100.0
     assert weights.sum() == pytest.approx(1.0, abs=1e-6)
+
+    aligned = build_return_matrix(tickers, None, market)
+    yields = np.array([market.fund(t).dividend_yield for t in tickers])
+    recomputed = compute_metrics(weights, aligned.matrix, yields, risk_free_rate=0.0)
+
+    reported = body["meta"]["metrics"]["optimized"]
+    assert recomputed.cagr == pytest.approx(reported["cagr"], abs=1e-6)
+    assert recomputed.volatility == pytest.approx(reported["volatility"], abs=1e-6)
+    assert recomputed.sharpe == pytest.approx(reported["sharpe"], abs=1e-6)
+    assert recomputed.max_drawdown == pytest.approx(reported["max_drawdown"], abs=1e-6)
+    assert recomputed.dividend_yield == pytest.approx(reported["dividend_yield"], abs=1e-6)
 
 
 def test_case5_respects_yield_and_bounds(client):
@@ -279,14 +300,19 @@ def test_max_drawdown_portfolio_constraint_respected_when_feasible(client):
 def test_max_drawdown_portfolio_constraint_rejected_when_infeasible(client):
     # SPY (2008) and AGG (2022) both have historical drawdowns well above 15%
     # over their full common history, so a 15% cap for only these two assets
-    # is genuinely infeasible - this must be a clear 422, not silently
-    # invalid weights or a wrong "success".
+    # is not reachable - this must be a clear error, never silently invalid
+    # weights or a false "success". Unlike dividend yield (provable via a
+    # linear program), drawdown feasibility can't be certified analytically,
+    # so this correctly surfaces as 500 optimization_failed (the search
+    # didn't converge) rather than 422 (which would claim proven
+    # infeasibility the code never actually established).
     r = client.post("/optimize", json={
         "securities": [{"ticker": "SPY", "weight": 60}, {"ticker": "AGG", "weight": 40}],
         "strategy": "maximize_sharpe",
         "constraints": {"max_drawdown": 15},
     })
-    assert r.status_code == 422
+    assert r.status_code in (422, 500)
+    assert r.json()["error"]["code"] in ("infeasible_or_invalid_constraint", "optimization_failed")
 
 
 def test_volatility_range_constraint_respected(client):

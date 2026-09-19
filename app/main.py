@@ -25,6 +25,7 @@ from .data import DataError, MarketData, build_return_matrix
 from .factors import optimize_factor_exposure
 from .metrics import ANNUAL_RISK_FREE_RATE, compute_metrics, covariance_matrix
 from .optimize import (
+    OptimizationFailedError,
     equal_weights,
     maximize_sharpe,
     minimize_drawdown,
@@ -59,6 +60,19 @@ async def _api_error_handler(_request: Request, exc: ApiError):
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": exc.code, "message": exc.message, "details": exc.details}},
+    )
+
+
+@app.exception_handler(OptimizationFailedError)
+async def _optimization_failed_handler(_request: Request, exc: OptimizationFailedError):
+    # Distinct from ConstraintError/422: this means the numerical search
+    # itself never converged, not that the constraints were proven
+    # impossible to satisfy. A 500 here is honest about which of those two
+    # things happened; conflating them into one 422 would misrepresent a
+    # solver limitation as a fact about the request.
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "optimization_failed", "message": str(exc), "details": {}}},
     )
 
 

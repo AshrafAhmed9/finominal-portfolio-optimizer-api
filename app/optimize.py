@@ -101,6 +101,15 @@ def _portfolio_limit_constraints(return_matrix: np.ndarray, yields: np.ndarray, 
     return cons
 
 
+class OptimizationFailedError(RuntimeError):
+    """The numerical search itself never converged - SciPy reported failure
+    (success=False) on every attempted start. This is distinct from
+    ConstraintError: it means the search didn't find an answer, not that one
+    was proven not to exist. Mapped to a 500 in the API, never a 422 -
+    conflating "my search failed" with "this is certified infeasible" would
+    misrepresent a solver limitation as a fact about the problem."""
+
+
 def _acceptable(
     weights: np.ndarray,
     return_matrix: np.ndarray,
@@ -130,6 +139,7 @@ def _run_multistart(
     starts = _feasible_starts(bounds, extra_starts)
     best: OptimizationResult | None = None
     total_iterations = 0
+    any_solver_success = False
     scipy_constraints = [_sum_to_one_constraint(), *_portfolio_limit_constraints(return_matrix, yields, limits)]
     for start in starts:
         result = minimize(
@@ -144,13 +154,32 @@ def _run_multistart(
         # variable is pinned by equal min==max bounds, the solver short-circuits
         # before iterating and the attribute is simply absent (not zero).
         total_iterations += getattr(result, "nit", 0)
-        w = np.clip(result.x, bounds.lower, bounds.upper)
-        w = w / w.sum() if w.sum() > 0 else w
         if not result.success:
             continue
+        # Validate the RAW solver output before clipping it into range.
+        # np.clip would otherwise silently launder a nonfinite or wildly
+        # out-of-bounds x (e.g. [inf, -inf], or [5.0, -4.0] against [0,1]
+        # bounds) into something that merely *looks* like a valid weight
+        # vector - clipping is only appropriate to correct tiny floating-
+        # point overshoot at a boundary, not to rescue a genuinely bad
+        # solver result into a false "success".
+        if not np.all(np.isfinite(result.x)):
+            continue
+        tol = 1e-6
+        if np.any(result.x < bounds.lower - tol) or np.any(result.x > bounds.upper + tol):
+            continue
+        any_solver_success = True
+        w = np.clip(result.x, bounds.lower, bounds.upper)
+        w = w / w.sum() if w.sum() > 0 else w
         if not _acceptable(w, return_matrix, yields, bounds, limits):
             continue
         value = float(objective(w))
+        if not np.isfinite(value):
+            # A NaN/Infinity objective must never win by virtue of being the
+            # first candidate examined - `best is None or value < ...` would
+            # otherwise accept it on the very first start regardless of the
+            # comparison, since Python's `is None` short-circuits first.
+            continue
         if best is None or value < best.objective_value:
             best = OptimizationResult(
                 weights=w,
@@ -160,11 +189,21 @@ def _run_multistart(
                 iterations=total_iterations,
             )
     if best is None:
+        if not any_solver_success:
+            # Every single attempt failed to converge at the SciPy level -
+            # this is a search failure, report it as one (500), not as a
+            # claim that the constraints are impossible to satisfy (422).
+            raise OptimizationFailedError(
+                f"the numerical solver failed to converge from any of {len(starts)} "
+                "starting points; this reports that the search failed, not that the "
+                "problem is infeasible"
+            )
         raise ConstraintError(
             "no feasible allocation satisfying all constraints was found from "
-            f"{len(starts)} deterministic starting points; this may mean the "
-            "constraints are jointly infeasible, or that the search needs a "
-            "different starting point than this implementation tries"
+            f"{len(starts)} deterministic starting points, though the solver did "
+            "converge on some of them; this may mean the constraints are jointly "
+            "infeasible, or that the search needs a different starting point than "
+            "this implementation tries"
         )
     return best
 

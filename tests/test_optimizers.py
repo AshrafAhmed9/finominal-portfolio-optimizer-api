@@ -43,14 +43,23 @@ def test_equal_weights_rejects_incompatible_constraint():
 
 
 def test_min_volatility_matches_analytic_two_asset_solution():
+    # R7 regression: the previous version of this test requested zero *true*
+    # correlation but then compared against the zero-correlation-only
+    # formula var_b/(var_a+var_b) - the *empirical* sample covariance always
+    # has some nonzero cov_ab from sampling noise, and a wide 0.01 absolute
+    # tolerance was masking that mismatch rather than actually verifying
+    # anything. This uses a genuinely correlated series and the general
+    # closed-form two-asset minimum-variance solution, which accounts for
+    # the covariance term, at a much tighter tolerance.
     rng = np.random.default_rng(2)
-    r = _two_asset_returns(rng, vol_a=0.01, vol_b=0.04, corr=0.0)
+    r = _two_asset_returns(rng, n=5000, vol_a=0.01, vol_b=0.04, corr=0.35)
     cov = covariance_matrix(r)
     result = minimize_volatility(["A", "B"], _unbounded(2), r, np.zeros(2), NO_LIMITS, cov)
-    # Analytic zero-correlation minimum-variance weight: w_a = var_b / (var_a + var_b)
-    var_a, var_b = cov[0, 0], cov[1, 1]
-    expected_wa = var_b / (var_a + var_b)
-    assert result.weights[0] == pytest.approx(expected_wa, abs=0.01)
+
+    var_a, var_b, cov_ab = cov[0, 0], cov[1, 1], cov[0, 1]
+    expected_wa = (var_b - cov_ab) / (var_a + var_b - 2 * cov_ab)
+    expected_wa = float(np.clip(expected_wa, 0.0, 1.0))
+    assert result.weights[0] == pytest.approx(expected_wa, abs=1e-3)
 
 
 def test_min_volatility_beats_equal_weight_feasible_baseline():

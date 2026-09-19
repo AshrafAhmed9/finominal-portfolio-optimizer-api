@@ -82,10 +82,13 @@ def test_portfolio_violations_empty_when_satisfied():
     assert violations == {}
 
 
-def test_failure_to_find_feasible_point_is_not_a_false_infeasibility_certificate():
+def test_reachable_dividend_yield_does_not_falsely_raise():
     # A jointly-satisfiable region exists (yield >=1% is trivially reachable),
     # so the feasibility check should not raise even though it can't prove
-    # every nonlinear constraint combination is solvable in general.
+    # every nonlinear constraint combination is solvable in general. (Note:
+    # this checks the analytic LP-based yield pre-check specifically, not
+    # the nonlinear multi-start solver - see test_optimize_solver_failures.py
+    # for real solver-nonconvergence-vs-infeasibility coverage.)
     bounds = build_bounds(["A", "B"], min_weight_pct=0, max_weight_pct=100, per_security_pct=None)
     yields = np.array([0.01, 0.05])
     check_dividend_yield_feasible(bounds, yields, min_yield_pct=1.0)
