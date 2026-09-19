@@ -37,15 +37,27 @@ class OptimizationResult:
 def _feasible_starts(bounds: Bounds, extra: list[np.ndarray] | None = None) -> list[np.ndarray]:
     """A small deterministic set of starting points, each projected onto the
     simplex-with-bounds so every start is itself feasible for the equality
-    constraint (sum = 1) before the solver even begins."""
+    constraint (sum = 1) before the solver even begins.
+
+    The "corner" loop below generates one genuinely distinct point per
+    asset (weight pushed toward that asset's own upper bound, the rest
+    filled from their lower bounds) - a prior version ignored the loop
+    index entirely and produced the identical point n times.
+    """
     n = len(bounds.lower)
     candidates: list[np.ndarray] = [np.full(n, 1.0 / n)]
     for i in range(n):
         corner = bounds.lower.copy()
         remaining = 1.0 - corner.sum()
-        room = bounds.upper - corner
-        if remaining > 0 and room.sum() > 0:
-            corner = corner + room * (remaining / room.sum())
+        room_i = bounds.upper[i] - corner[i]
+        take_i = min(room_i, remaining)
+        corner[i] += take_i
+        remaining -= take_i
+        if remaining > 1e-12:
+            room_rest = bounds.upper - corner
+            room_rest[i] = 0.0  # already maxed out above; don't double-allocate
+            if room_rest.sum() > 0:
+                corner = corner + room_rest * (remaining / room_rest.sum())
         candidates.append(corner)
     if extra:
         candidates.extend(extra)
@@ -186,8 +198,14 @@ def _run_multistart(
                 objective_value=value,
                 solver_status=result.message,
                 starts_tried=len(starts),
-                iterations=total_iterations,
+                iterations=0,  # placeholder - set to the true total after the full search below
             )
+    # Report total iterations across every start actually attempted, not
+    # just those up to whichever loop position happened to produce the
+    # winning candidate - a prior version under-reported this whenever the
+    # winner wasn't the last start tried.
+    if best is not None:
+        best.iterations = total_iterations
     if best is None:
         if not any_solver_success:
             # Every single attempt failed to converge at the SciPy level -

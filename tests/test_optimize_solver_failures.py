@@ -87,6 +87,42 @@ def test_converged_but_wildly_out_of_bounds_result_is_rejected_not_clipped():
             _run_multistart(lambda w: float(w @ w), _bounds(), _return_matrix(), np.zeros(2), NO_LIMITS)
 
 
+def test_feasible_starts_are_genuinely_distinct_corners():
+    # R10 regression: the corner-generation loop used to ignore its own
+    # loop index and produce the identical [0.5, 0.5] point n times for an
+    # unbounded 2-asset problem, instead of distinct corners toward each
+    # asset's own upper bound.
+    from app.optimize import _feasible_starts
+
+    starts = _feasible_starts(_bounds(2))
+    corner_candidates = [tuple(np.round(s, 6)) for s in starts]
+    assert (1.0, 0.0) in corner_candidates
+    assert (0.0, 1.0) in corner_candidates
+    # not every start need be unique (the equal-weight start and a random
+    # Dirichlet draw could in principle coincide), but the two asset-biased
+    # corners specifically must differ from each other and from equal-weight
+    assert corner_candidates[1] != corner_candidates[2]
+
+
+def test_reported_iterations_reflect_the_full_search_not_just_the_winner():
+    # R10 regression: iterations used to be captured at the moment a new
+    # best candidate was found, undercounting work done by later starts in
+    # the same search. Now it's the true total across every start tried.
+    call_log = []
+
+    def side_effect(*args, **kwargs):
+        call_log.append(1)
+        # first call "wins" (lowest objective value achievable here), later
+        # calls still report real iteration counts that must be included
+        x = np.array([0.9, 0.1]) if len(call_log) == 1 else np.array([0.5, 0.5])
+        return _fake_result(success=True, x=x, nit=7)
+
+    with patch("app.optimize.minimize", side_effect=side_effect):
+        result = _run_multistart(lambda w: -float(w[0]), _bounds(), _return_matrix(), np.zeros(2), NO_LIMITS)
+    total_starts = len(call_log)
+    assert result.iterations == 7 * total_starts
+
+
 def test_mixed_success_and_failure_returns_the_successful_candidate():
     # A realistic case: most starts fail to converge, one succeeds cleanly.
     # The successful one must still be returned rather than treated as an
