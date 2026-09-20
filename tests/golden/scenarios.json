@@ -1,0 +1,100 @@
+[
+  {
+    "id": 1,
+    "name": "equal_weights_2asset",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 25},
+        {"ticker": "SPY", "weight": 75}
+      ],
+      "strategy": "equal_weights"
+    },
+    "expected_weights": {"IEFA": 50.00, "SPY": 50.00},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_01_equal_weights.png"
+  },
+  {
+    "id": 2,
+    "name": "risk_parity_2asset",
+    "request": {
+      "securities": [
+        {"ticker": "VEA", "weight": 25},
+        {"ticker": "AGG", "weight": 75}
+      ],
+      "strategy": "risk_parity"
+    },
+    "expected_weights": {"VEA": 20.11, "AGG": 79.89},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_02_risk_parity.png"
+  },
+  {
+    "id": 3,
+    "name": "minimize_volatility_3asset",
+    "request": {
+      "securities": [
+        {"ticker": "SPY", "weight": 60},
+        {"ticker": "AGG", "weight": 30},
+        {"ticker": "GLD", "weight": 10}
+      ],
+      "strategy": "minimize_volatility"
+    },
+    "expected_weights": {"SPY": 6.86, "AGG": 91.41, "GLD": 1.74},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_03_min_volatility.png"
+  },
+  {
+    "id": 4,
+    "name": "maximize_sharpe_5asset",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 20},
+        {"ticker": "GLD", "weight": 20},
+        {"ticker": "AGG", "weight": 20},
+        {"ticker": "VEA", "weight": 20},
+        {"ticker": "SPY", "weight": 20}
+      ],
+      "strategy": "maximize_sharpe"
+    },
+    "expected_weights": {"IEFA": 0.00, "GLD": 28.43, "AGG": 0.00, "VEA": 0.00, "SPY": 71.57},
+    "tolerance_pp": 0.1,
+    "reference_screenshot": "docs/reference/case_04_max_sharpe.png"
+  },
+  {
+    "id": 5,
+    "name": "maximize_sharpe_constrained",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 20},
+        {"ticker": "GLD", "weight": 20},
+        {"ticker": "AGG", "weight": 20},
+        {"ticker": "VEA", "weight": 20},
+        {"ticker": "SPY", "weight": 20}
+      ],
+      "strategy": "maximize_sharpe",
+      "constraints": {"min_dividend_yield": 2.5, "min_weight": 5, "max_weight": 40}
+    },
+    "expected_weights": {"IEFA": 0.00, "GLD": 5.91, "AGG": 50.07, "VEA": 0.00, "SPY": 44.01},
+    "tolerance_pp": 0.1,
+    "note": "Reference captured from the live tool's dividend-yield constraint only (2.5% min) - its Portfolio Optimizer UI has no min/max weight bound fields, so the 5-40% per-security bounds in this request are not verifiable against it and are expected to produce a different result than the live tool's unbounded-weight reference.",
+    "reference_screenshot": "docs/reference/case_05_max_sharpe_constrained.png"
+  },
+  {
+    "id": 6,
+    "name": "factor_exposure_momentum",
+    "request": {
+      "securities": [
+        {"ticker": "IEFA", "weight": 20},
+        {"ticker": "GLD", "weight": 20},
+        {"ticker": "AGG", "weight": 20},
+        {"ticker": "VEA", "weight": 20},
+        {"ticker": "SPY", "weight": 20}
+      ],
+      "strategy": "optimize_factor_exposure",
+      "factor_targets": [{"factor": "momentum", "direction": "maximize"}]
+    },
+    "expected_weights": {"IEFA": 0.00, "GLD": 100.00, "AGG": 0.00, "VEA": 0.00, "SPY": 0.00},
+    "tolerance_pp": 0.1,
+    "note": "Per the assignment, case 6 is NOT required to match the live tool's exact weights (it uses a broader 5-factor internal model - Value, Momentum, Low Volatility, Quality, Size - versus this build's 3 available factors - Momentum, Value, Size). The pass condition asserted separately in tests/test_factors.py::test_case6_momentum_exposure_increases is that optimized momentum beta > current momentum beta, not weight parity. expected_weights here is shown only as an informal comparison point.",
+    "reference_screenshot": "docs/reference/case_06_factor_momentum.png"
+  }
+]

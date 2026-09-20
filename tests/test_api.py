@@ -229,7 +229,7 @@ def test_response_metrics_recompute_from_serialized_weights(client, market):
     # serialized weights via an independent path (app.metrics directly, not
     # the API) and asserts they match what meta.metrics reported.
     from app.data import build_return_matrix
-    from app.metrics import compute_metrics
+    from app.metrics import ANNUAL_RISK_FREE_RATE, compute_metrics
 
     r = client.post("/optimize", json={"securities": FIVE_FUND_EQUAL, "strategy": "minimize_volatility"})
     assert r.status_code == 200
@@ -241,7 +241,9 @@ def test_response_metrics_recompute_from_serialized_weights(client, market):
 
     aligned = build_return_matrix(tickers, None, market)
     yields = np.array([market.fund(t).dividend_yield for t in tickers])
-    recomputed = compute_metrics(weights, aligned.matrix, yields, risk_free_rate=0.0)
+    recomputed = compute_metrics(
+        weights, aligned.matrix, yields, risk_free_rate=ANNUAL_RISK_FREE_RATE
+    )
 
     reported = body["meta"]["metrics"]["optimized"]
     assert recomputed.cagr == pytest.approx(reported["cagr"], abs=1e-6)

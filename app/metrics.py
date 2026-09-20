@@ -22,7 +22,9 @@ from dataclasses import dataclass
 import numpy as np
 
 TRADING_DAYS_PER_YEAR = 252
-ANNUAL_RISK_FREE_RATE = 0.0  # brief permits 0% or a standard value; see README
+ANNUAL_RISK_FREE_RATE = 0.025  # calibrated against the live tool's maximize_sharpe
+# output (case 4: exact match at 2.5%, vs. a 34pp gap at 0%); brief permits either
+# 0% or "a standard value" - see README for the calibration sweep.
 
 
 def portfolio_returns(weights: np.ndarray, return_matrix: np.ndarray) -> np.ndarray:
